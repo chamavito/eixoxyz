@@ -116,9 +116,10 @@ function statusesToMap(statuses) {
 const StatusMapContext = createContext(statusesToMap(DEFAULT_STATUSES));
 function useStatusMap() { return useContext(StatusMapContext); }
 function useIsMobile() {
-  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  const [mobile, setMobile] = useState(false);
   useEffect(() => {
     const fn = () => setMobile(window.innerWidth < 768);
+    fn();
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
@@ -142,15 +143,15 @@ const MI = {
   trophy:    ({size=16,color="#fff"}) => <_MI size={size} color={color} d="M19 5h-2V3H7v2H5C3.9 5 3 5.9 3 7v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0 0 11 15.9V18H9v2h6v-2h-2v-2.1a5.01 5.01 0 0 0 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.22 5 8zm14 0c0 1.22-.84 2.4-2 2.82V7h2v1z"/>,
   box:       ({size=16,color="#fff"}) => (
     <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      {/* bottom half of box */}
+
       <path fill={color} d="M3 13v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7H3z"/>
-      {/* left flap */}
+
       <path fill={color} d="M2 8l3 4h4L7 8z" opacity="0.85"/>
-      {/* right flap */}
+
       <path fill={color} d="M22 8l-3 4h-4l2-4z" opacity="0.85"/>
-      {/* back panel */}
+
       <path fill={color} d="M8 3l-6 5h5l2-4zM16 3l6 5h-5l-2-4z" opacity="0.6"/>
-      {/* front seam */}
+
       <rect fill={color} x="10" y="13" width="4" height="7" opacity="0.3"/>
     </svg>
   ),
@@ -516,7 +517,7 @@ function RichEditor({ value, onChange, title }) {
 
   return (
     <>
-      {/* Normal editor */}
+
       <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
         <Toolbar targetRef={editorRef} isFocus={false} />
         <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={() => sync(editorRef.current)}
@@ -525,8 +526,6 @@ function RichEditor({ value, onChange, title }) {
           style={{ flex:1, overflowY:"auto", padding:"32px 48px", fontSize:"14px", lineHeight:"1.85", color:CAMERA_COLOR, fontFamily:"'Inter', sans-serif", outline:"none", caretColor:CAMERA_COLOR, backgroundColor:"#fdf9f4" }}
         />
       </div>
-
-      {/* Focus mode overlay */}
       {focusMode && (
         <div style={{ position:"fixed", inset:0, zIndex:9000, backgroundColor:"#1a2218", display:"flex", flexDirection:"column", animation:"fadeIn 0.2s ease" }}>
           <Toolbar targetRef={focusRef} isFocus={true} />
@@ -657,8 +656,6 @@ function PerfTab({ perf, onChange, unlocked, noteDate }) {
           </div>
         ))}
       </div>
-
-      {/* Score summary */}
       {(perf.views || perf.retention || perf.ctr) && (
         <div style={{ border:"1px solid #ddeadd", borderRadius:"12px", padding:"14px 18px", backgroundColor:"#f0f5f0" }}>
           <div style={{ fontSize:"11px", fontWeight:700, color:SAGE, fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"10px" }}>Resumo</div>
@@ -670,7 +667,6 @@ function PerfTab({ perf, onChange, unlocked, noteDate }) {
         </div>
       )}
 
-      {/* Free notes */}
       <div>
         <div style={{ fontSize:"12px", fontWeight:600, color:"#8a7060", fontFamily:"'Inter', sans-serif", marginBottom:"8px" }}>Observações</div>
         <textarea
@@ -819,8 +815,6 @@ function BlocosTab({ onInsert }) {
           </button>
         )}
       </div>
-
-      {/* Block type picker */}
       <div style={{ display:"flex", flexWrap:"wrap", gap:"6px" }}>
         {BLOCK_TYPES.map(type => (
           <button key={type.key} onClick={() => addBlock(type)}
@@ -831,8 +825,6 @@ function BlocosTab({ onInsert }) {
           </button>
         ))}
       </div>
-
-      {/* Block list */}
       <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
         {blocks.map((block, idx) => {
           const type = BLOCK_TYPES.find(t => t.key === block.type);
@@ -969,7 +961,6 @@ function DatePicker({ value, onChange, error, light }) {
         <div onClick={()=>setOpen(false)} style={{ position:"fixed", inset:0, zIndex:7999, backgroundColor:"rgba(30,60,30,0.35)", backdropFilter:"blur(1px)" }} />
         <div style={{ position:"fixed", top:popupPos.top, left:popupPos.left, zIndex:8000, backgroundColor:"#1a2e1a", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"12px", padding:"14px", boxShadow:"0 16px 40px rgba(0,0,0,0.45)", width:"228px", animation:"fadeIn 0.15s ease", userSelect:"none" }}>
 
-          {/* Month / year nav */}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
             <button onClick={prevMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:"16px", padding:"2px 6px", borderRadius:"4px" }}>‹</button>
             <span style={{ fontSize:"12px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", fontSize:"11px" }}>
@@ -977,15 +968,11 @@ function DatePicker({ value, onChange, error, light }) {
             </span>
             <button onClick={nextMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:"16px", padding:"2px 6px", borderRadius:"4px" }}>›</button>
           </div>
-
-          {/* Day headers */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"6px" }}>
             {PT_DAYS.map((d,i) => (
               <div key={i} style={{ textAlign:"center", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", padding:"2px 0" }}>{d}</div>
             ))}
           </div>
-
-          {/* Day grid */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
             {cells.map((cell, i) => {
               const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
@@ -1060,7 +1047,7 @@ function InlineDatePicker({ value, onChange, light }) {
 
   return (
     <div style={{ userSelect:"none" }}>
-      {/* Month nav */}
+
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
         <button onClick={prevMo} style={{ background:"none", border:"none", color:c.nav, cursor:"pointer", fontSize:"16px", padding:"2px 4px", borderRadius:"4px", lineHeight:1 }}>‹</button>
         <span style={{ fontSize:"11px", fontWeight:700, color:c.header, fontFamily:"'DM Mono', monospace", letterSpacing:"0.08em", textTransform:"uppercase" }}>
@@ -1068,13 +1055,11 @@ function InlineDatePicker({ value, onChange, light }) {
         </span>
         <button onClick={nextMo} style={{ background:"none", border:"none", color:c.nav, cursor:"pointer", fontSize:"16px", padding:"2px 4px", borderRadius:"4px", lineHeight:1 }}>›</button>
       </div>
-      {/* Day headers */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
         {PT_DAYS.map((d,i) => (
           <div key={i} style={{ textAlign:"center", fontSize:"9px", fontWeight:700, color:c.dayHdr, fontFamily:"'DM Mono', monospace", textTransform:"uppercase", padding:"2px 0" }}>{d}</div>
         ))}
       </div>
-      {/* Day grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
         {cells.map((cell, i) => {
           const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
@@ -1282,10 +1267,9 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   return (
     <div style={{ position:"fixed", inset:0, zIndex:2000, display:"flex", flexDirection: isMobile ? "column" : "row", backgroundColor:SAGE, animation:"editorEnter 0.2s cubic-bezier(0.4,0,0.2,1)" }}>
 
-        {/* ── SIDEBAR — full height desktop, bottom sheet mobile ── */}
         {isMobile ? (
           <>
-            {/* Mobile top bar replaces sidebar */}
+
             <div style={{ flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", backdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.25)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
               <button onClick={onCloseAll || onClose} style={{ ...ghostBtn, padding:"6px 10px", fontSize:"12px", display:"flex", alignItems:"center", gap:"6px" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -1300,12 +1284,11 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                 {saved?"✓ Salvo!":"Salvar"}
               </button>
             </div>
-            {/* Mobile sidebar drawer */}
             {mobileSidebarOpen && (
               <div style={{ flexShrink:0, maxHeight:"45vh", overflowY:"auto", borderBottom:"1px solid rgba(255,255,255,0.08)", backgroundColor:"rgba(87,119,87,0.15)" }}
                 className="sidebar-scroll">
                 <div style={{ display:"flex", flexDirection:"column", gap:"16px", padding:"12px 14px 20px" }}>
-                  {/* Status */}
+
                   <div>
                     <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
@@ -1318,7 +1301,6 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                       })}
                     </div>
                   </div>
-                  {/* Date */}
                   <div>
                     <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data de publicação</div>
                     <InlineDatePicker value={noteDate} onChange={v=>{setNoteDate(v);setDateError("");}} />
@@ -1330,18 +1312,14 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
         ) : (
         <div style={{ width:"320px", flexShrink:0, display:"flex", flexDirection:"column", borderRight:"1px solid rgba(255,255,255,0.08)", backgroundColor:"transparent", position:"relative" }}>
 
-          {/* Fixed header: reordenar */}
           <div style={{ flexShrink:0, display:"flex", alignItems:"center", padding:"14px 14px", backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.25)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
             <button onClick={()=>{ setSidebarReorder(v=>!v); setReorderHeld(null); }}
               style={{ ...ghostBtn, padding:"7px 14px", fontSize:"12px", border: sidebarReorder ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.35)", backgroundColor: sidebarReorder ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)", borderRadius:"8px", display:"flex", alignItems:"center", gap:"6px" }}>
               ⠿ {sidebarReorder ? "Concluído" : "Reordenar"}
             </button>
           </div>
-
-          {/* Scroll container — só o conteúdo, sem a header */}
           <div className="sidebar-scroll" style={{ flex:1, overflowY:"auto", position:"relative" }}>
 
-            {/* Sections in order */}
             <div style={{ display:"flex", flexDirection:"column", gap: sidebarReorder ? "4px" : "20px", padding:"14px 14px 24px" }}>
                 {sidebarOrder.map((sectionKey, idx) => {
                   const labelMap = { titulo:"Título", data:"Data de publicação", status:"Status", descricao:"Descrição", insercoes:"Inserções", tags:"Tags", perf:"Performance", moodboard:"Moodboard" };
@@ -1674,17 +1652,15 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                 })}
               </div>
 
-          </div>{/* end scroll container */}
-        </div>{/* end sidebar */}
-        )}{/* end desktop sidebar conditional */}
+          </div>
+        </div>
+        )}
 
-        {/* ── EDITOR DIREITO — topbar + abas + painel branco ── */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, minHeight:0, padding: isMobile ? "0 12px 16px" : "0 32px 32px" }}>
 
-          {/* Topbar: Voltar + tab switcher + Lixeira + Salvar */}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 0 14px", flexShrink:0 }}>
             {!isMobile && <button onClick={onCloseAll||onClose} style={{ ...ghostBtn, padding:"7px 16px", fontSize:"13px" }}>← Voltar</button>}
-            {/* Tab switcher */}
+
             <div style={{ display:"flex", position:"relative", backgroundColor:"rgba(0,0,0,0.2)", borderRadius:"10px", padding:"3px", gap:"0" }}>
               <div style={{ position:"absolute", top:"3px", bottom:"3px", width:"88px", borderRadius:"7px", backgroundColor:"rgba(255,255,255,0.18)", transition:"transform 0.2s cubic-bezier(0.4,0,0.2,1)", transform: editorTab === "roteiro" ? "translateX(0)" : "translateX(88px)", pointerEvents:"none" }} />
               {[{key:"roteiro", label:"Roteiro"},{key:"broll", label:"B-roll"}].map(({key,label}) => (
@@ -1700,14 +1676,12 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
               {!isMobile && <button onClick={handleSaveWithMood} disabled={!title.trim()} style={{ ...ghostBtn, padding:"7px 22px", fontSize:"13px", fontWeight:700, backgroundColor:saved?"rgba(5,150,105,0.7)":"rgba(255,255,255,0.18)", border:saved?"1px solid #6ee7b7":"1px solid rgba(255,255,255,0.38)", minWidth:"96px", opacity:title.trim()?1:0.45 }}>{saved?"✓ Salvo!":"Salvar"}</button>}
             </div>
           </div>
-
-        {/* Editor panel */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
 
         {editorTab === "roteiro" && (
         <div style={{ flex:1, display:"flex", flexDirection:"column", backgroundColor:"#fdf9f4", minHeight:0, overflow:"hidden", borderRadius:"16px", boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
           <RichEditor value={content} onChange={setContent} title={title} />
-        {/* Bottom bar — hints + counters */}
+
         {(() => {
           const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
           const mod = isMac ? "Command + " : "Ctrl + ";
@@ -1728,7 +1702,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
         {editorTab === "broll" && (
         <div style={{ flex:1, overflowY:"auto", borderRadius:"16px", backgroundColor:"#fdf9f4", boxShadow:"0 8px 40px rgba(0,0,0,0.2)", padding:"28px 32px", display:"flex", flexDirection:"column", gap:"28px" }}>
-          {/* Global toggle button */}
+
           {(anyDone || Object.values(broll).some(i=>i.length>0)) && (
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"-16px" }}>
               <button onClick={toggleAllBroll}
@@ -1760,7 +1734,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                                      && brollDragging?.cat === key && !isDragging;
                   return (
                     <div key={item.id}>
-                      {/* Drop gap indicator above this item */}
+
                       {isTarget && (
                         <div style={{ height:"3px", borderRadius:"2px", backgroundColor:SAGE, margin:"2px 6px", opacity:0.7, transition:"height 0.1s" }} />
                       )}
@@ -1807,7 +1781,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                         style={{ display:"flex", alignItems:"center", gap:"10px", padding:"5px 6px", borderRadius:"7px", transition:"opacity 0.15s", opacity: isDragging ? 0.35 : 1, cursor:"grab" }}
                         onMouseEnter={e=>{ if(!isDragging) e.currentTarget.style.backgroundColor="rgba(0,0,0,0.04)"; }}
                         onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
-                        {/* Drag handle */}
+
                         <svg width="10" height="14" viewBox="0 0 10 14" fill="none" style={{ flexShrink:0, opacity:0.25, cursor:"grab" }}>
                           <circle cx="2.5" cy="2.5" r="1.5" fill="#8a7060"/>
                           <circle cx="7.5" cy="2.5" r="1.5" fill="#8a7060"/>
@@ -1816,7 +1790,6 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                           <circle cx="2.5" cy="11.5" r="1.5" fill="#8a7060"/>
                           <circle cx="7.5" cy="11.5" r="1.5" fill="#8a7060"/>
                         </svg>
-                        {/* Checkbox */}
                         <div onClick={()=>updateBrollItem(key, item.id, {done:!item.done})}
                           style={{ width:"16px", height:"16px", borderRadius:"4px", border: item.done ? "none" : `1.5px solid #c0b090`, backgroundColor: item.done ? SAGE : "transparent", flexShrink:0, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all 0.15s" }}>
                           {item.done && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1834,7 +1807,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                     </div>
                   );
                 })}
-                {/* Gap at end of list */}
+
                 {brollDragOver?.cat === key && brollDragOver?.idx === broll[key].length && brollDragging?.cat === key && (
                   <div style={{ height:"3px", borderRadius:"2px", backgroundColor:SAGE, margin:"2px 6px", opacity:0.7 }} />
                 )}
@@ -1844,8 +1817,8 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
         </div>
         )}
 
-        </div>{/* end editor panel wrapper */}
-        </div>{/* end editor direito */}
+        </div>
+        </div>
     </div>
   );
 }
@@ -1924,7 +1897,6 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
       style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"360px", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"visible", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
-        {/* Header */}
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <div style={{ display:"flex", alignItems:"center", gap:"7px" }}>
             <Instagram size={11} color={IG_PINK} strokeWidth={2.5} />
@@ -1932,8 +1904,6 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
           </div>
           <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
         </div>
-
-        {/* Body */}
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
@@ -1956,8 +1926,6 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
               className="green-input"
               style={{ fontSize:"12px", border:"none", outline:"none", color:"rgba(255,255,255,0.75)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'DM Mono', monospace" }} />
           </div>
-
-          {/* Date + Time pills */}
           <div style={{ display:"flex", gap:"8px" }}>
             <div ref={dateRef} style={{ position:"relative", flex:1 }}>
               <button onClick={openCal}
@@ -2003,8 +1971,6 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
                 style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", padding:0, width:"62px", caretColor:"#fff", cursor:"pointer" }} />
             </label>
           </div>
-
-          {/* Status pills */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
@@ -2021,8 +1987,6 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
           </div>
 
         </div>
-
-        {/* Footer */}
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
           {onDelete && (
             <button onClick={()=>{ onDelete(); onClose(); }}
@@ -2120,7 +2084,6 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
       style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"360px", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"visible", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
-        {/* Header */}
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Roteiro</div>
           <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
@@ -2131,11 +2094,8 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
             <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
           </div>
         </div>
-
-        {/* Body */}
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
-          {/* Title */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
               onKeyDown={e=>{ if(e.key==="Enter" && title.trim()) handleSave(); }}
@@ -2143,10 +2103,8 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-
-          {/* Date + Time pills */}
           <div style={{ display:"flex", gap:"8px" }}>
-            {/* Date pill */}
+
             <div ref={dateRef} style={{ position:"relative", flex:1 }}>
               <button onClick={openCal}
                 style={{ ...pill, width:"100%", cursor:"pointer", justifyContent:"flex-start", boxSizing:"border-box" }}
@@ -2184,8 +2142,6 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
                 </div>
               )}
             </div>
-
-            {/* Time pill */}
             <label style={{ ...pill, cursor:"default" }}>
               <Clock size={11} color="rgba(255,255,255,0.45)" strokeWidth={2} style={{flexShrink:0}} />
               <input type="time" value={pubTime} onChange={e=>setPubTime(e.target.value)}
@@ -2193,8 +2149,6 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
                 style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", padding:0, width:"62px", caretColor:"#fff", cursor:"pointer" }} />
             </label>
           </div>
-
-          {/* Status pills */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
@@ -2212,8 +2166,6 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
           </div>
 
         </div>
-
-        {/* Footer */}
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
           <button onClick={()=>{ onDelete(); onClose(); }}
             style={{ padding:"9px 13px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center" }}>
@@ -2269,18 +2221,14 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
       style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"380px", maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"hidden", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
-        {/* Header */}
         <div style={{ padding:"18px 20px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", flexShrink:0 }}>
           <div>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>{isNew ? "Novo marco" : "Editar marco"}</div>
           </div>
           <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
         </div>
-
-        {/* Body */}
         <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:"12px" }}>
 
-          {/* Title */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Título</div>
             <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
@@ -2289,8 +2237,6 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-
-          {/* Icon picker */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"10px" }}>Ícone</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:"6px" }}>
@@ -2304,16 +2250,12 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
               ); })}
             </div>
           </div>
-
-          {/* Date */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data</div>
             <InlineDatePicker value={date} onChange={setDate} />
           </div>
 
         </div>
-
-        {/* Footer */}
         <div style={{ padding:"14px 18px 18px", display:"flex", gap:"8px", flexShrink:0 }}>
           {!isNew && (
             <button onClick={()=>{ onDelete(); onClose(); }}
@@ -2435,14 +2377,14 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
       <div style={{ position:"relative", backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"380px", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease", overflow:"hidden", fontFamily:"'Inter', sans-serif" }}>
 
         {step === "form" ? (<>
-          {/* Header */}
+
           <div style={{ padding:"18px 20px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.3)" }}>
             <span style={{ fontSize:"11px", fontWeight:700, color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.1em", textTransform:"uppercase" }}>Criar novo</span>
             <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
           </div>
 
           <div style={{ padding:"16px 18px 20px", display:"flex", flexDirection:"column", gap:"12px" }}>
-            {/* Type picker */}
+
             <div style={{ display:"flex", gap:"4px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"4px" }}>
               {TYPE_OPTIONS.map(({ key, label, Icon }) => {
                 const active = type === key;
@@ -2455,8 +2397,6 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
                 );
               })}
             </div>
-
-            {/* Title */}
             <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>
                 {type === "post" ? "Título / descrição curta" : "Título"}
@@ -2468,8 +2408,6 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
                 style={{ fontSize:"14px", fontFamily:"'Inter', sans-serif", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", boxSizing:"border-box", width:"100%", padding:0, caretColor:"#fff" }}
               />
             </div>
-
-            {/* Post-specific fields */}
             {type === "post" && (<>
               <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
                 <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Legenda</div>
@@ -2487,13 +2425,10 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
               </div>
             </>)}
 
-            {/* Date */}
             <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data</div>
               <DatePicker value={date} onChange={setDate} />
             </div>
-
-            {/* Time (reminders and posts) */}
             {(type === "reminder" || type === "post") && (
               <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
                 <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Horário</div>
@@ -2503,7 +2438,6 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
               </div>
             )}
 
-            {/* Actions */}
             <div style={{ display:"flex", gap:"8px", marginTop:"4px" }}>
               <button onClick={onClose} style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif", transition:"all 0.12s" }}
                 onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.14)"}
@@ -2513,8 +2447,6 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
                 Criar {activeType.label}
               </button>
             </div>
-
-            {/* Manage statuses link */}
             {onUpdateStatuses && (
               <button onClick={openStatusManager}
                 style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.3)", fontSize:"10px", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textDecoration:"underline", textUnderlineOffset:"3px", padding:0, alignSelf:"center" }}
@@ -2525,7 +2457,7 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
             )}
           </div>
         </>) : (<>
-          {/* Done step */}
+
           <div style={{ padding:"32px 24px", display:"flex", flexDirection:"column", alignItems:"center", gap:"16px", textAlign:"center" }}>
             <div style={{ width:"48px", height:"48px", borderRadius:"50%", backgroundColor:"rgba(255,255,255,0.15)", border:"1.5px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <activeType.Icon size={22} color="#fff" strokeWidth={2} />
@@ -2554,7 +2486,6 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
           </div>
         </>)}
 
-        {/* ── Status manager overlay ── */}
         {managingStatuses && (
           <div style={{ position:"absolute", inset:0, backgroundColor:SAGE, borderRadius:"16px", display:"flex", flexDirection:"column", zIndex:10, animation:"fadeIn 0.15s ease" }}>
             <div style={{ padding:"16px 18px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", flexShrink:0 }}>
@@ -2882,16 +2813,12 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
       style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"340px", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"visible", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
-        {/* Header */}
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Editar lembrete</div>
           <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
         </div>
-
-        {/* Body */}
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
-          {/* Title */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
               onKeyDown={e=>{ if(e.key==="Enter" && title.trim()) handleSave(); }}
@@ -2899,8 +2826,6 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-
-          {/* Notes / URL */}
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"7px" }}>Notas ou URL</div>
             <input value={notes} onChange={e=>setNotes(e.target.value)}
@@ -2908,18 +2833,13 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
               className="green-input"
               style={{ fontSize:"13px", fontWeight:400, border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-
-          {/* Time + Date pills */}
           <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
 
-            {/* All-day toggle */}
             <button onClick={()=>setAllDay(v=>!v)}
               style={{ ...pill, cursor:"pointer", backgroundColor: allDay ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.13)", borderColor: allDay ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.14)", color: allDay ? "#fff" : "rgba(255,255,255,0.55)", gap:"6px" }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Dia inteiro
             </button>
-
-            {/* Time pill — hidden when allDay */}
             {!allDay && (
               <label style={{ ...pill, cursor:"default" }}>
                 <Clock size={11} color="rgba(255,255,255,0.45)" strokeWidth={2} style={{ flexShrink:0 }} />
@@ -2929,7 +2849,6 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
               </label>
             )}
 
-            {/* Date pill */}
             <div ref={dateRef} style={{ position:"relative", flex:1 }}>
               <button onClick={openCal}
                 style={{ ...pill, width:"100%", cursor:"pointer", justifyContent:"flex-start" }}
@@ -2940,21 +2859,17 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
                 </svg>
                 {displayDate}
               </button>
-
-              {/* Calendar popup */}
               {calOpen && (
                 <div style={{ position:"fixed", top:calPos.top, left:calPos.left, zIndex:9999, backgroundColor:"#1a2e1a", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"12px", padding:"12px", boxShadow:"0 16px 40px rgba(0,0,0,0.5)", width:"216px", animation:"fadeIn 0.12s ease", userSelect:"none" }}>
-                  {/* Month nav */}
+
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
                     <button onClick={prevMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>‹</button>
                     <span style={{ fontSize:"11px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>{PT_MONTHS[viewMonth]} {viewYear}</span>
                     <button onClick={nextMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>›</button>
                   </div>
-                  {/* Day headers */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
                     {PT_DAYS.map((d,i)=><div key={i} style={{ textAlign:"center", fontSize:"8px", fontWeight:700, color:"rgba(255,255,255,0.28)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase" }}>{d}</div>)}
                   </div>
-                  {/* Days grid */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
                     {cells.map((cell,i)=>{
                       const iso=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
@@ -2976,8 +2891,6 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
 
           </div>
         </div>
-
-        {/* Footer */}
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
           <button onClick={()=>{ onDelete(reminder); onClose(); }}
             style={{ padding:"9px 13px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center" }}>
@@ -3084,7 +2997,6 @@ function DayCell({ cellData, colIdx, isMobile, notes, milestones, reminders, tod
       onMouseLeave={e=>{ setIsHovered(false); if(isDragOver) return; e.currentTarget.style.filter=""; }}
       style={{ border:isDragOver?`2px solid ${BROLL_COLOR}`:isToday?`1px solid ${T.todayBorder}`:"none", borderRadius:"10px", padding: isMobile ? "5px 4px" : "8px", minHeight: isMobile ? "52px" : "80px", backgroundColor:isDragOver?"#f0fdf4":isCurrentMonth?(isWeekend?"#6b8f6b":"#8BAB8A"):"#4a6b4a", cursor:"pointer", display:"flex", flexDirection:"column", transition:"filter 0.12s, border-color 0.12s", position:"relative", boxShadow:isDragOver?`0 0 0 3px ${BROLL_COLOR}33`:"none" }}>
 
-      {/* Plus button — top right, fades in/out on hover */}
       <div style={{ position:"absolute", top:"6px", right:"6px", pointerEvents:"none", opacity: isHovered && !isDragOver ? 0.85 : 0, transform: isHovered && !isDragOver ? "scale(1)" : "scale(0.6)", transition:"opacity 0.18s ease, transform 0.18s ease" }}>
         <div style={{ width:"18px", height:"18px", borderRadius:"50%", backgroundColor:isCurrentMonth?"#4A6B4A":"#8CAB8A", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.18)" }}>
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><line x1="5" y1="1" x2="5" y2="9" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/><line x1="1" y1="5" x2="9" y2="5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/></svg>
@@ -3092,7 +3004,6 @@ function DayCell({ cellData, colIdx, isMobile, notes, milestones, reminders, tod
       </div>
 
       <div style={{ fontSize:"12px", fontWeight:isToday?700:500, color:isToday?T.todayText:T.text, backgroundColor:isToday?T.todayCircle:"transparent", borderRadius:"50%", width:"22px", height:"22px", display:"flex", alignItems:"center", justifyContent:"center", marginBottom: isMobile ? "2px" : "5px", flexShrink:0, fontFamily:"'DM Mono', monospace" }}>{day}</div>
-      {/* Notes */}
       {isMobile ? (
         <div style={{ display:"flex", flexWrap:"wrap", gap:"2px", marginTop:"1px" }}>
           {sortedNotes.map(n => {
@@ -3376,7 +3287,7 @@ export default function CalendarNotes() {
       `}</style>
 
       <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "16px 10px" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"auto", height:"100vh", boxSizing:"border-box" }}>
-        {/* Header */}
+
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: isMobile ? "14px" : "28px" }}>
           <div style={{ display:"flex", gap: isMobile ? "5px" : "8px", alignItems:"center" }}>
             <button onClick={()=>setShowMenu(true)} style={{ ...navBtn, width:"36px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"4px" }}>
@@ -3396,8 +3307,6 @@ export default function CalendarNotes() {
             </div>
           </div>
         </div>
-
-        {/* Calendar grid with lasso selection */}
         <div ref={gridRef} style={{ position:"relative", userSelect: lassoStart.current ? "none" : "auto" }}
           onMouseDown={handleGridMouseDown}
           onMouseMove={handleGridMouseMove}
@@ -3417,13 +3326,10 @@ export default function CalendarNotes() {
                   }} onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})} onOpenReminder={r=>setOpenReminder(r)} onDragStart={handleDragStart} onDrop={handleDrop} onMilestoneDragStart={handleMilestoneDragStart} onMilestoneDrop={handleMilestoneDrop} onReminderDragStart={handleReminderDragStart} onReminderDrop={handleReminderDrop} onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)} onQuickEditStatus={handleQuickEditStatus} onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}} onQuickDeleteMilestone={handleQuickDeleteMilestone} onAddReminder={handleAddReminder} onDeleteReminder={handleDeleteReminder} selectedIds={selectedIds} />
           ))}
           </div>
-
-          {/* Lasso rectangle */}
           {lasso && lasso.w > 4 && lasso.h > 4 && (
             <div style={{ position:"absolute", left:lasso.x, top:lasso.y, width:lasso.w, height:lasso.h, border:"1.5px solid rgba(122,184,122,0.8)", backgroundColor:"rgba(87,119,87,0.12)", borderRadius:"4px", pointerEvents:"none", zIndex:100 }} />
           )}
 
-          {/* Floating action bar */}
           {selectedIds.size > 0 && (
             <div style={{ position:"fixed", bottom:"32px", left:"50%", transform:"translateX(-50%)", display:"flex", alignItems:"center", gap:"8px", backgroundColor:"#1e2e1e", border:"1px solid rgba(122,184,122,0.35)", borderRadius:"12px", padding:"10px 16px", zIndex:999, boxShadow:"0 8px 32px rgba(0,0,0,0.5)", animation:"slideUp 0.18s ease" }}>
               <span style={{ fontSize:"11px", fontWeight:700, color:"rgba(122,184,122,0.9)", fontFamily:"'DM Mono', monospace", marginRight:"4px" }}>{selectedIds.size} roteiro{selectedIds.size!==1?"s":""}</span>
@@ -3448,8 +3354,6 @@ export default function CalendarNotes() {
 
 
       </div>
-
-      {/* Quick create modal */}
       {quickCreate && (
         <QuickCreateModal
           initialDate={quickCreate.date}
@@ -3465,7 +3369,6 @@ export default function CalendarNotes() {
         />
       )}
 
-      {/* Open note quick modal from calendar chip */}
       {openEditor?.type === "note" && (
           <NoteQuickModal note={openEditor.item}
             onSave={(fields) => { handleUpdateNote({...openEditor.item,...fields}, openEditor.item.date); setOpenEditor(null); }}
@@ -3481,7 +3384,7 @@ export default function CalendarNotes() {
           onDelete={()=>{ handleSoftDeleteNote(openEditor.item.id, openEditor.item.date); setOpenEditor(null); }}
         />
       )}
-      {/* Full note editor */}
+
       {openEditor?.type === "note-full" && (
         <NoteEditor note={openEditor.item} date={openEditor.item.date}
           onSave={(fields, oldDate) => { handleUpdateNote({...openEditor.item,...fields}, oldDate); setOpenEditor(null); }}
@@ -3492,8 +3395,6 @@ export default function CalendarNotes() {
         />
       )}
 
-
-      {/* Open reminder editor from calendar badge */}
       {openReminder && (
         <ReminderEditor reminder={openReminder}
           onSave={updated=>{ handleDeleteReminder(openReminder); handleAddReminder(updated); setOpenReminder(null); }}
@@ -3501,7 +3402,7 @@ export default function CalendarNotes() {
           onDelete={r=>{ handleDeleteReminder(r); setOpenReminder(null); }}
         />
       )}
-      {/* Open milestone editor from calendar chip */}
+
       {openEditor?.type === "milestone" && (
         <MilestoneEditor milestone={openEditor.item} date={openEditor.item.date}
           onSave={fields=>{ handleUpdateMilestone({...openEditor.item,...fields}); setOpenEditor(null); }}
@@ -3510,7 +3411,6 @@ export default function CalendarNotes() {
         />
       )}
 
-      {/* Quick edit title modal */}
       {quickEditNote && (
         <div style={{ position:"fixed", inset:0, zIndex:5000, backgroundColor:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setQuickEditNote(null)}>
           <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:"#fff", borderRadius:"14px", padding:"24px", width:"420px", boxShadow:"0 20px 50px rgba(0,0,0,0.2)", animation:"slideUp 0.2s ease" }}>
@@ -3526,9 +3426,6 @@ export default function CalendarNotes() {
         </div>
       )}
 
-      {/* Ideas panel */}
-
-      {/* Trash panel */}
       {showTrash && (
         <div style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"20px", animation:"fadeIn 0.15s ease" }} onClick={()=>setShowTrash(false)}>
           <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:"#fff", borderRadius:"16px", width:"380px", maxHeight:"85vh", display:"flex", flexDirection:"column", boxShadow:"0 25px 60px rgba(0,0,0,0.25)", animation:"slideUp 0.2s ease", overflow:"hidden" }}>
@@ -3564,20 +3461,16 @@ export default function CalendarNotes() {
         </div>
       )}
 
-      {/* Side menu */}
       {showMenu && (
         <div onClick={()=>setShowMenu(false)}
           style={{ position:"fixed", inset:0, zIndex:4500, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)", animation:"fadeIn 0.15s ease" }}>
           <div onClick={e=>e.stopPropagation()}
             style={{ position:"absolute", left:"16px", top:"16px", bottom:"16px", width:"260px", borderRadius:"16px", backgroundColor:SAGE, border:"1px solid rgba(255,255,255,0.12)", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", display:"flex", flexDirection:"column", animation:"menuSlideIn 0.25s cubic-bezier(0.4,0,0.2,1)", overflow:"hidden" }}>
 
-            {/* Header */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 18px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", flexShrink:0 }}>
               <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Menu</span>
               <button onClick={()=>setShowMenu(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:"6px", cursor:"pointer", color:"rgba(255,255,255,0.6)", fontSize:"16px", width:"26px", height:"26px", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
             </div>
-
-            {/* Items */}
             <div style={{ flex:1, padding:"8px 10px", display:"flex", flexDirection:"column", gap:"2px", overflowY:"auto" }}>
 
               {[
@@ -3595,7 +3488,6 @@ export default function CalendarNotes() {
                 </button>
               ))}
 
-              {/* Importar */}
               <label style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", borderRadius:"9px", border:"none", background:"none", cursor:"pointer", width:"100%", textAlign:"left", color:"rgba(255,255,255,0.8)", fontFamily:"'Inter', sans-serif", fontSize:"13px", fontWeight:500, transition:"background 0.12s" }}
                 onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"}
                 onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
