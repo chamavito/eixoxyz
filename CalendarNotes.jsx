@@ -478,6 +478,7 @@ function supaSubscribe(onRemoteChange) {
 }
 
 function loadState() {
+  // Load from localStorage as visual cache while Supabase hydrates
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -3947,6 +3948,8 @@ export default function CalendarNotes() {
   const T = THEMES.sage;
 
   const [state, dispatch] = useReducer(appReducer, null, loadState);
+  const [isLoading, setIsLoading] = useState(true);
+
   // On mount: load from persistent storage and hydrate if found
   useEffect(() => {
     dispatch({type:"PURGE_TRASH"});
@@ -3962,6 +3965,8 @@ export default function CalendarNotes() {
             if (parsed?.notes && parsed?.milestones) dispatch({type:"HYDRATE", state: { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) }});
           }
         } catch(e) {}
+      }
+      setIsLoading(false);
       }
     });
     const onFocus = () => {
@@ -4156,6 +4161,7 @@ export default function CalendarNotes() {
         @keyframes plusPop      { from { opacity: 0; transform: scale(0.6) } to { opacity: 0.85; transform: scale(1) } }
         @keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }
         @keyframes menuSlideIn  { from { transform: translateX(-24px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
+        @keyframes shimmer      { 0%,100% { opacity: 0 } 50% { opacity: 1 } }
         .sidebar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.3s; }
         .sidebar-scroll:hover { scrollbar-color: #4B654B transparent; }
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
@@ -4195,6 +4201,10 @@ export default function CalendarNotes() {
       `}</style>
 
       <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100dvh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
+
+        {isLoading && (
+          <div style={{ position:"absolute", inset:0, zIndex:200, pointerEvents:"none", animation:"shimmer 1.6s ease-in-out infinite", backgroundColor:"rgba(74,107,74,0.45)" }} />
+        )}
 
         {isMobile ? (
           /* ── Mobile topbar — identical to editor ── */
