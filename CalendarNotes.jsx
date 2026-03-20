@@ -386,7 +386,10 @@ const STORAGE_KEY = "calendarNotesState_v1";
 // ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
 const SUPA_URL  = "https://nmnilywctfwilgnwlbjd.supabase.co";
 const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbmlseXdjdGZ3aWxnbndsYmpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjc1NzYsImV4cCI6MjA4OTYwMzU3Nn0.nvfvIm67kC4zs8P8VcMVMY3yfYNOLUlW-5HCXf3-SV4";
-const SUPA_ROW  = "default"; // single-row key for the whole state
+const SUPA_ROW  = "default";
+
+// Unique ID for this browser tab — used to ignore our own saves
+const TAB_ID = Math.random().toString(36).slice(2);
 
 async function supaLoad() {
   try {
@@ -412,9 +415,66 @@ async function supaSave(state) {
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates",
       },
-      body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state) }),
+      body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state), tab_id: TAB_ID }),
     });
   } catch(e) {}
+}
+
+// Subscribe to Realtime changes — calls onRemoteChange when another device saves
+function supaSubscribe(onRemoteChange) {
+  const wsUrl = SUPA_URL.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
+  let ws, heartbeat, reconnectTimer;
+  let closed = false;
+
+  function connect() {
+    if (closed) return;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      // Join the postgres_changes channel for our table
+      ws.send(JSON.stringify({
+        topic: "realtime:public:calendar_state",
+        event: "phx_join",
+        payload: { config: { broadcast: { self: false }, presence: { key: "" }, postgres_changes: [{ event: "UPDATE", schema: "public", table: "calendar_state", filter: `id=eq.${SUPA_ROW}` }] } },
+        ref: "1"
+      }));
+      // Heartbeat every 25s to keep connection alive
+      heartbeat = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: "hb" }));
+      }, 25000);
+    };
+
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.event === "postgres_changes" && msg.payload?.data?.record) {
+          const record = msg.payload.data.record;
+          // Ignore changes we made ourselves
+          if (record.tab_id === TAB_ID) return;
+          const raw = record.data;
+          if (!raw) return;
+          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (parsed?.notes && parsed?.milestones) onRemoteChange({ reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) });
+        }
+      } catch(e) {}
+    };
+
+    ws.onclose = () => {
+      clearInterval(heartbeat);
+      if (!closed) reconnectTimer = setTimeout(connect, 3000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+
+  return () => {
+    closed = true;
+    clearTimeout(reconnectTimer);
+    clearInterval(heartbeat);
+    if (ws) ws.close();
+  };
 }
 
 function loadState() {
@@ -3916,20 +3976,16 @@ export default function CalendarNotes() {
     };
     window.addEventListener("focus", onFocus);
 
-    // Poll every 10s to sync changes from other devices
-    const pollInterval = setInterval(() => {
+    // Realtime subscription — instant sync when another device saves
+    const unsubscribe = supaSubscribe(remote => {
       if (importLock.current) return;
-      supaLoad().then(remote => {
-        if (!remote) return;
-        const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
-        const remoteTs = remote._savedAt || 0;
-        if (remoteTs > localTs) dispatch({type:"HYDRATE", state: remote});
-      });
-    }, 11000);
+      dispatch({type:"HYDRATE", state: remote});
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch(e) {}
+    });
 
     return () => {
       window.removeEventListener("focus", onFocus);
-      clearInterval(pollInterval);
+      unsubscribe();
     };
   }, []);
 
