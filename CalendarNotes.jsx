@@ -3915,7 +3915,22 @@ export default function CalendarNotes() {
       });
     };
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+
+    // Poll every 10s to sync changes from other devices
+    const pollInterval = setInterval(() => {
+      if (importLock.current) return;
+      supaLoad().then(remote => {
+        if (!remote) return;
+        const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
+        const remoteTs = remote._savedAt || 0;
+        if (remoteTs > localTs) dispatch({type:"HYDRATE", state: remote});
+      });
+    }, 11000);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const importLock = useRef(false);
