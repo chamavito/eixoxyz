@@ -2154,7 +2154,6 @@ function TimeInput({ value, onChange }) {
 // Renders as a bottom sheet on mobile, dropdown below anchor on desktop
 
 function DropdownSheet({ anchorRef, open, onClose, children, width = 220 }) {
-  const isMobile = useIsMobile();
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const panelRef = useRef(null);
 
@@ -2162,38 +2161,29 @@ function DropdownSheet({ anchorRef, open, onClose, children, width = 220 }) {
     if (!open) return;
     const h = e => { if (panelRef.current && !panelRef.current.contains(e.target) && (!anchorRef?.current || !anchorRef.current.contains(e.target))) onClose(); };
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("touchstart", h);
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open || isMobile || !anchorRef?.current) return;
+    if (!open || !anchorRef?.current) return;
     const r = anchorRef.current.getBoundingClientRect();
-    const panelW = width;
-    let left = r.right - panelW;
+    let left = r.right - width;
     if (left < 8) left = r.left;
-    setPos({ top: r.bottom + 6, left });
-  }, [open, isMobile, width]);
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    let top = r.bottom + 6;
+    setPos({ top, left });
+  }, [open, width]);
 
   if (!open) return null;
 
-  if (isMobile) {
-    return (
-      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
-        <div ref={panelRef} onClick={e=>e.stopPropagation()} style={{ backgroundColor:SAGE, borderRadius:"20px 20px 0 0", width:"100%", paddingBottom:"env(safe-area-inset-bottom, 16px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
-          <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
-            <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
-          </div>
-          {children}
-          <div style={{ height:"8px" }} />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div ref={panelRef} style={{ position:"fixed", top: pos.top, left: pos.left, zIndex:4000, width: `${width}px`, backgroundColor:"#2d4a2d", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"12px", boxShadow:"0 12px 40px rgba(0,0,0,0.45)", animation:"fadeIn 0.12s ease", overflow:"hidden" }}>
-      {children}
-    </div>
+    <>
+      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3999 }} />
+      <div ref={panelRef} style={{ position:"fixed", top: pos.top, left: pos.left, zIndex:4000, width:`${width}px`, backgroundColor:"#2d4a2d", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"12px", boxShadow:"0 12px 40px rgba(0,0,0,0.45)", animation:"fadeIn 0.12s ease", overflow:"hidden" }}>
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -2293,7 +2283,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
                 <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
                   style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
-                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  {date ? (date.split("-")[2] + "/" + date.split("-")[1] + "/" + date.split("-")[0]) : "Sem data"}
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -2445,7 +2435,7 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
                 <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
                   style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
-                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  {date ? (date.split("-")[2] + "/" + date.split("-")[1] + "/" + date.split("-")[0]) : "Sem data"}
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -2552,7 +2542,7 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
                 <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
                   style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
-                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  {date ? (date.split("-")[2] + "/" + date.split("-")[1] + "/" + date.split("-")[0]) : "Sem data"}
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -2594,11 +2584,13 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
 // ─── FEED CELL ────────────────────────────────────────────────────────────────
 function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpdateNote, onAddMilestone, onUpdateMilestone, onAddReminder, statuses=DEFAULT_STATUSES, onUpdateStatuses }) {
   const T = useTheme();
+  const STATUS_MAP = useStatusMap();
   const overlayRef = useRef(null);
   const titleRef = useRef(null);
 
   const [type, setType]         = useState(initialType || "note");
   const [title, setTitle]       = useState("");
+  const [notes, setNotes]       = useState("");
   const [date, setDate]         = useState(initialDate || todayISO());
   const [time, setTime]         = useState("09:00");
   const [caption, setCaption]   = useState("");
@@ -2607,7 +2599,7 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
   const [created, setCreated]   = useState(null);
   const [openEditor, setOpenEditor] = useState(null);
 
-  useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
+  useEffect(() => { setTimeout(() => { if(titleRef.current) titleRef.current.focus(); }, 80); }, []);
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
@@ -2630,11 +2622,19 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
     const id = "s" + Date.now();
     setEditStatuses(p => [...p, { key:id, label:"Novo status", color:"#64748b" }]);
   };
-  const updateStatus = (idx, patch) => setEditStatuses(p => p.map((s,i) => i===idx ? {...s,...patch} : s));
-  const deleteStatus = (idx) => setEditStatuses(p => p.filter((_,i) => i!==idx));
+  const updateStatus = (idx, patch) => setEditStatuses(p => p.map((s, si) => { return si === idx ? {...s,...patch} : s; }));
+  const deleteStatus = (idx) => setEditStatuses(p => p.filter((s, si) => { return si !== idx; }));
   const saveStatuses = () => { onUpdateStatuses(editStatuses); setManagingStatuses(false); };
 
   const openStatusManager = () => { setEditStatuses(statuses); setManagingStatuses(true); };
+
+  const dateAnchorRef   = useRef(null);
+  const statusAnchorRef = useRef(null);
+  const formatAnchorRef = useRef(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [formatPickerOpen, setFormatPickerOpen] = useState(false);
+  const [noteStatus, setNoteStatus] = useState("ideia");
 
   const canSubmit = title.trim() && date;
 
@@ -2642,21 +2642,20 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
     if (!canSubmit) return;
     const id = type === "reminder" ? "r"+Date.now() : generateId();
     if (type === "note") {
-      const note = { id, date, title:title.trim(), content:"", size:"large", status:"ideia" };
+      const note = { id, date, title:title.trim(), content:"", size:"large", status:noteStatus };
       onAddNote(note);
       setCreated(note);
     } else if (type === "post") {
-      const tags = hashtags.split(/[\s,]+/).map(t=>t.replace(/^#+/,"").trim().toLowerCase()).filter(Boolean);
       const note = { id, date, title:title.trim(), platform:"instagram", size:"small", status:"agendado",
-                     content:"", igCaption:caption.trim(), igHashtags:tags, pubTime:time };
+                     content:"", igCaption:caption.trim(), igHashtags:[], pubTime:time };
       onAddNote(note);
       setCreated(note);
     } else if (type === "milestone") {
-      const m = { id, date, title:title.trim(), category:"outro", value:"", description:"", image:null };
+      const m = { id, date, title:title.trim(), notes, category:"outro", value:"", description:"", image:null };
       onAddMilestone(m);
       setCreated(m);
     } else {
-      const r = { id, date, title:title.trim(), time };
+      const r = { id, date, title:title.trim(), notes, time };
       onAddReminder(r);
       setCreated(r);
     }
@@ -2672,29 +2671,37 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
 
   const activeType = TYPE_OPTIONS.find(t => t.key === type);
 
-  if (openEditor?.type === "note") {
-    const handleSave = (fields, oldDate) => { onUpdateNote({...openEditor.item,...fields}, oldDate ?? openEditor.item.date); onClose(); };
+  const displayDate = date
+    ? (date.split("-")[2] + "/" + date.split("-")[1] + "/" + date.split("-")[0])
+    : "Sem data";
+
+  const handleOverlayClick = e => { if (e.target === overlayRef.current) onClose(); };
+
+  if (openEditor && openEditor.type === "note") {
+    const handleSave = (fields, oldDate) => { onUpdateNote({...openEditor.item,...fields}, oldDate !== undefined ? oldDate : openEditor.item.date); onClose(); };
     return <NoteEditor note={openEditor.item} date={openEditor.item.date} onSave={handleSave} onSaveSilent={handleSave} onClose={()=>setOpenEditor(null)} onCloseAll={onClose} onDelete={null} />;
   }
-  if (openEditor?.type === "milestone") {
+  if (openEditor && openEditor.type === "milestone") {
     const handleSave = fields => { onUpdateMilestone({...openEditor.item,...fields}); onClose(); };
     return <MilestoneEditor milestone={openEditor.item} date={openEditor.item.date} onSave={handleSave} onClose={()=>setOpenEditor(null)} onDelete={null} />;
   }
 
   return (
-    <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
+    <div ref={overlayRef} onClick={handleOverlayClick}
       style={{ position:"fixed", inset:0, zIndex:2000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
-      <div style={{ position:"relative", backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"380px", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease", overflow:"hidden", fontFamily:"'Inter', sans-serif" }}>
+      <div style={{ position:"relative", backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"380px", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease", overflow:"visible", fontFamily:"'Inter', sans-serif" }}>
 
         {step === "form" ? (<>
 
-          <div style={{ padding:"18px 20px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.3)" }}>
-            <span style={{ fontSize:"11px", fontWeight:700, color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.1em", textTransform:"uppercase" }}>Criar novo</span>
+          {/* Header */}
+          <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.3)", borderRadius:"16px 16px 0 0" }}>
+            <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.1em", textTransform:"uppercase" }}>Criar novo</span>
             <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
           </div>
 
-          <div style={{ padding:"16px 18px 20px", display:"flex", flexDirection:"column", gap:"12px" }}>
+          <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
+            {/* Type selector */}
             <div style={{ display:"flex", gap:"4px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"4px" }}>
               {TYPE_OPTIONS.map(({ key, label, Icon }) => {
                 const active = type === key;
@@ -2707,56 +2714,120 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
                 );
               })}
             </div>
-            <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-              <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>
-                {type === "post" ? "Título / descrição curta" : "Título"}
-              </div>
+
+            {/* Title */}
+            <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
               <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
                 onKeyDown={e=>{ if(e.key==="Enter" && canSubmit && type !== "post") handleCreate(); }}
-                placeholder={type==="note" ? "Título do roteiro..." : type==="post" ? "Ex: Anúncio de parceria..." : type==="milestone" ? "Nome do marco..." : "Título do lembrete..."}
+                placeholder={type==="note" ? "Título do roteiro..." : type==="post" ? "Título do post..." : type==="milestone" ? "Nome do marco..." : "Título do lembrete..."}
                 className="green-input"
-                style={{ fontSize:"14px", fontFamily:"'Inter', sans-serif", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", boxSizing:"border-box", width:"100%", padding:0, caretColor:"#fff" }}
-              />
+                style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
             </div>
-            {type === "post" && (<>
-              <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-                <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Legenda</div>
+
+            {/* Caption for post */}
+            {type === "post" && (
+              <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
                 <textarea value={caption} onChange={e=>setCaption(e.target.value)} rows={3}
-                  placeholder="Texto da legenda do post..."
+                  placeholder="Legenda do post..."
                   className="green-input"
                   style={{ width:"100%", resize:"none", border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", fontSize:"13px", fontFamily:"'Inter', sans-serif", padding:0, caretColor:"#fff", lineHeight:"1.5", boxSizing:"border-box" }} />
               </div>
-              <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-                <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Hashtags</div>
-                <input value={hashtags} onChange={e=>setHashtags(e.target.value)}
-                  placeholder="#hashtag1 #hashtag2..."
-                  className="green-input"
-                  style={{ width:"100%", border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", fontSize:"13px", fontFamily:"'DM Mono', monospace", padding:0, caretColor:"#fff", boxSizing:"border-box" }} />
-              </div>
-            </>)}
+            )}
 
-            <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-              <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data</div>
-              <DatePicker value={date} onChange={setDate} />
-            </div>
-            {(type === "reminder" || type === "post") && (
-              <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-                <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Horário</div>
-                <input type="time" value={time} onChange={e=>setTime(e.target.value)}
-                  className="green-time"
-                  style={{ fontSize:"13px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff" }} />
+            {/* Notes — milestone and reminder */}
+            {(type === "milestone" || type === "reminder") && (
+              <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
+                <input value={notes} onChange={e=>setNotes(e.target.value)}
+                  placeholder="Notas ou URL..."
+                  className="green-input"
+                  style={{ fontSize:"13px", fontWeight:400, border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
               </div>
             )}
 
-            <div style={{ display:"flex", gap:"8px", marginTop:"4px" }}>
-              <button onClick={onClose} style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif", transition:"all 0.12s" }}
-                onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.14)"}
-                onMouseLeave={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.08)"}>Cancelar</button>
+            {/* Properties */}
+            <div style={{ display:"flex", flexDirection:"column" }}>
+
+              {/* Status — only for note */}
+              {type === "note" && (
+                <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                  <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
+                  <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                    <button ref={statusAnchorRef} onClick={()=>setStatusPickerOpen(v=>!v)}
+                      style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:(STATUS_MAP[noteStatus]||STATUS_MAP.ideia).color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                      {(STATUS_MAP[noteStatus]||STATUS_MAP.ideia).label}
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Format — only for post */}
+              {type === "post" && (
+                <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                  <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Criar</span>
+                  <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                    <button ref={formatAnchorRef} onClick={()=>setFormatPickerOpen(v=>!v)}
+                      style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.18)", color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                      {caption || "Post"}
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Data */}
+              <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Data</span>
+                <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                  <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
+                    style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                    {displayDate}
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Horário — reminder and post */}
+              {(type === "reminder" || type === "post") && (
+                <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                  <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Horário</span>
+                  <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                    <TimeInput value={time} onChange={setTime} />
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Dropdowns */}
+            <DropdownSheet anchorRef={statusAnchorRef} open={statusPickerOpen} onClose={()=>setStatusPickerOpen(false)} width={200}>
+              <div style={{ padding:"6px 6px" }}>
+                {Object.entries(STATUS_MAP).filter(entry => entry[0] !== "aroll" && entry[0] !== "broll").map(([key, val]) => { const a = noteStatus===key; return (
+                  <button key={key} onClick={()=>{ setNoteStatus(key); setStatusPickerOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:"none", background:a?"rgba(255,255,255,0.1)":"transparent", cursor:"pointer", width:"100%", textAlign:"left", fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight:a?700:400 }}>
+                    <span style={{ width:"8px", height:"8px", borderRadius:"50%", backgroundColor:val.color, flexShrink:0 }} />
+                    {val.label}
+                    {a && <svg style={{ marginLeft:"auto" }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </button>
+                ); })}
+              </div>
+            </DropdownSheet>
+
+            <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
+              <div style={{ padding:"12px 16px 16px" }}>
+                <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+              </div>
+            </DropdownSheet>
+
+            {/* Action buttons */}
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={onClose} style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>Cancelar</button>
               <button onClick={handleCreate} disabled={!canSubmit}
                 style={{ flex:2, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: canSubmit ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)", color: canSubmit ? "#fff" : "rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:canSubmit?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.15s" }}>
                 Criar {activeType.label}
               </button>
             </div>
+
             {onUpdateStatuses && (
               <button onClick={openStatusManager}
                 style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.3)", fontSize:"10px", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textDecoration:"underline", textUnderlineOffset:"3px", padding:0, alignSelf:"center" }}
@@ -2765,6 +2836,7 @@ function QuickCreateModal({ initialDate, initialType, onClose, onAddNote, onUpda
                 Gerenciar status
               </button>
             )}
+
           </div>
         </>) : (<>
 
@@ -3064,24 +3136,21 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
-      style={{ position:"fixed", inset:0, zIndex:2500, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
-      <div style={{ backgroundColor:SAGE, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
-
-        {/* Handle bar */}
-        <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
-          <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
-        </div>
+      style={{ position:"fixed", inset:0, zIndex:2500, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
+      <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"360px", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"hidden", animation:"slideUp 0.2s ease" }}>
 
         {/* Header */}
-        <div style={{ padding:"6px 18px 10px", flexShrink:0 }}>
+        <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", flexShrink:0, backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
             <div>
               <div style={{ fontSize:"14px", fontWeight:700, color:"#fff", fontFamily:"'Inter', sans-serif" }}>{dateCapitalized}</div>
               {isToday && <div style={{ fontSize:"10px", color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", marginTop:"2px" }}>Hoje</div>}
             </div>
-            <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.4)", fontSize:"20px", lineHeight:1, padding:"4px" }}>×</button>
+            <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
           </div>
-          {/* Creation buttons */}
+
+          {/* Create section */}
+          <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Criar novo</div>
           <div style={{ display:"flex", gap:"8px" }}>
             <button onClick={()=>{ onCreateNew("note"); onClose(); }} style={createBtnStyle}>
               <Youtube size={15} color="#ffffff" strokeWidth={2} />
@@ -3103,7 +3172,8 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
         </div>
 
         {/* Items list */}
-        <div style={{ flex:1, overflowY:"auto", padding:"0 14px 24px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"8px 14px 16px" }}>
+          {hasItems && <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px", marginTop:"4px" }}>Neste dia</div>}
           {!hasItems && (
             <div style={{ textAlign:"center", padding:"32px 0", color:"rgba(255,255,255,0.35)", fontSize:"13px", fontFamily:"'Inter', sans-serif" }}>
               Nenhum item neste dia
@@ -3222,7 +3292,7 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
                 <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
                   style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
-                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  {date ? (date.split("-")[2] + "/" + date.split("-")[1] + "/" + date.split("-")[0]) : "Sem data"}
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -3484,7 +3554,6 @@ function buildMonthDays(year, month) {
 }
 
 function MobileYearPicker({ currentYear, currentMonth, onSelect, onClose }) {
-  const isMobile = useIsMobile();
   const [selYear, setSelYear] = useState(currentYear);
   const yearScrollRef = useRef(null);
   const years = Array.from({ length: 9 }, (_, i) => currentYear - 4 + i);
@@ -3558,24 +3627,8 @@ function MobileYearPicker({ currentYear, currentMonth, onSelect, onClose }) {
     </>
   );
 
-  if (isMobile) {
-    return (
-      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
-        <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:"#3a5a3a", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"85vh", display:"flex", flexDirection:"column", paddingBottom:"env(safe-area-inset-bottom, 20px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.5)", animation:"slideUp 0.2s ease" }}>
-          <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px", flexShrink:0 }}>
-            <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
-          </div>
-          <div style={{ padding:"4px 20px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-            <span style={{ fontSize:"12px", fontWeight:700, color:"rgba(255,255,255,0.4)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Ir para</span>
-            <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.35)", fontSize:"20px", cursor:"pointer", lineHeight:1, padding:"4px" }}>×</button>
-          </div>
-          {inner}
-        </div>
-      </div>
-    );
-  }
+  if (isMobile) {}  // unused — always use centered modal
 
-  // Desktop — centered modal, no close button
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
       <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"420px", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"hidden", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif", paddingTop:"12px" }}>
@@ -3596,7 +3649,7 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
   useEffect(() => {
     if (scrollToTodayRef) {
       scrollToTodayRef.current = () => {
-        todayRef.current?.scrollIntoView({ behavior:"smooth", block:"start" });
+        todayRef.current?.scrollIntoView({ behavior:"smooth", block:"center" });
       };
     }
   }, [scrollToTodayRef]);
@@ -3607,10 +3660,10 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
   const prevY = month === 0  ? year - 1 : year;
   const nextY = month === 11 ? year + 1 : year;
 
-  // Scroll to today on mount / month change
+  // Scroll to today on mount / month change — centered in viewport
   useEffect(() => {
     if (todayRef.current && scrollRef.current) {
-      todayRef.current.scrollIntoView({ behavior:"auto", block:"start" });
+      todayRef.current.scrollIntoView({ behavior:"auto", block:"center" });
     }
   }, [year, month]);
 
@@ -3712,8 +3765,6 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
 
 function MobileGridView({ year, month, today, notes, milestones, reminders, onDayOpen, onNavigate, onOpenNote, onOpenMilestone, onOpenReminder, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
   const STATUS_MAP = useStatusMap();
-  const touchStartX = useRef(null);
-  const touchStartY = useRef(null);
   const containerRef = useRef(null);
 
   // Build grid for current month only (no overflow rows)
@@ -3740,23 +3791,6 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
 
   const numRows = cells.length / 7;
 
-  const handleTouchStart = e => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  };
-  const handleTouchEnd = e => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-    // Only treat as swipe if horizontal movement dominates and exceeds threshold
-    if (Math.abs(dx) > 50 && dy < 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      if (dx < 0) onNavigate(nextM === 0 ? nextY : year, nextM);
-      else        onNavigate(prevM === 11 ? prevY : year, prevM);
-    }
-    touchStartX.current = null;
-  };
-
-  // Determine if a touch sequence was a tap (not a swipe)
   const cellTouchStart = useRef({});
   const handleCellTouchStart = (e, date) => {
     cellTouchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, date };
@@ -3766,17 +3800,15 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
     if (!s.date) return;
     const dx = Math.abs(e.changedTouches[0].clientX - s.x);
     const dy = Math.abs(e.changedTouches[0].clientY - s.y);
-    // Only open if finger barely moved (tap, not swipe)
     if (dx < 10 && dy < 10) {
-      e.preventDefault();
+      e.preventDefault(); // prevents the subsequent onClick from firing
       onDayOpen(date);
     }
     cellTouchStart.current = {};
   };
 
   return (
-    <div ref={containerRef} style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, padding:"4px 2px 4px", userSelect:"none" }}
-      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div ref={containerRef} style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, padding:"4px 2px 4px", userSelect:"none" }}>
 
       {/* Weekday headers */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"3px", flexShrink:0 }}>
@@ -3799,6 +3831,7 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
           return (
             <div key={idx}
               style={{ backgroundColor: isCurrentMonth ? (isWeekend ? "#6b8f6b" : "#8BAB8A") : "#3d5c3d", borderRadius:"4px", display:"flex", flexDirection:"column", padding:"4px 3px", cursor:"pointer", overflow:"hidden", border: isToday ? "1.5px solid rgba(255,255,255,0.7)" : "none", minHeight:0 }}
+              onClick={() => onDayOpen(cell.date)}
               onTouchStart={e => handleCellTouchStart(e, cell.date)}
               onTouchEnd={e => handleCellTouchEnd(e, cell.date)}>
 
@@ -3904,7 +3937,13 @@ export default function CalendarNotes() {
   const grid    = buildCalendarGrid(year, month);
 
   const [mobileDayModal, setMobileDayModal] = useState(null); // { date }
-  const [mobileView, setMobileView] = useState("list"); // "list" | "grid"
+  const [mobileView, setMobileView] = useState(() => {
+    try { return localStorage.getItem("calendarMobileView") || "grid"; } catch(e) { return "grid"; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("calendarMobileView", mobileView); } catch(e) {}
+  }, [mobileView]);
   const [showNavPicker, setShowNavPicker] = useState(false);
   const prevMonth = () => { if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); };
   const nextMonth = () => { if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); };
@@ -4094,10 +4133,11 @@ export default function CalendarNotes() {
                 <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
-            <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:"8px" }}>
+            <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:"8px", display:"flex", alignItems:"center", gap:"4px" }}>
               <span style={{ fontSize:"15px", fontWeight:700, color:"#fff", fontFamily:"'Inter', sans-serif", letterSpacing:"-0.01em" }}>
                 {(() => { const d=new Date(); return `${d.getDate()} de ${PT_MONTHS_FULL[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; })()}
               </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
               {/* View toggle */}
