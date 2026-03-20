@@ -3723,9 +3723,10 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
 
   // Scroll to today on mount / month change — centered in viewport
   useEffect(() => {
-    if (todayRef.current && scrollRef.current) {
-      todayRef.current.scrollIntoView({ behavior:"auto", block:"center" });
-    }
+    const t = setTimeout(() => {
+      if (todayRef.current) todayRef.current.scrollIntoView({ behavior:"auto", block:"center" });
+    }, 80);
+    return () => clearTimeout(t);
   }, [year, month]);
 
   const sentinelBtn = {
