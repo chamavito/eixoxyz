@@ -1,6 +1,6 @@
 import React, { useState, useReducer, useCallback, useEffect, useRef, useMemo, createContext, useContext } from "react";
 import { Trash2, PenLine, Images, Star, Mail, Instagram, FileText, Youtube, Eye, EyeOff, Pencil, FilePlus, Flag, Bell, Clock, Play, BarChart2, ThumbsUp, MessageSquare, TrendingUp, DollarSign, Lock } from "lucide-react";
-const SAGE = "#577757";
+const SAGE = "#4A6B4A";
 
 // ─── THEME SYSTEM ─────────────────────────────────────────────────────────────
 
@@ -25,8 +25,8 @@ const THEMES = {
     scrollThumb: "#e2e8f0",
   },
   sage: {
-    key: "sage", label: "Sálvia", swatch: "#577757",
-    appBg:       "#577757",
+    key: "sage", label: "Sálvia", swatch: "#4A6B4A",
+    appBg:       "#4A6B4A",
     panelBg:     "#ffffff",
     panelAlt:    "#f0f5f0",
     border:      "#ddd0bc",
@@ -96,14 +96,14 @@ let sharedDescriptionStore = "";
 const CAMERA_COLOR = "#1e293b";
 
 const DEFAULT_STATUSES = [
-  { key:"ideia",       label:"Ideia",         color:"#94a3b8" },
-  { key:"roteiro",     label:"Roteiro",       color:"#7c3aed" },
-  { key:"aroll",       label:"Gravar a-roll", color:"#ca8a04" },
-  { key:"broll",       label:"Gravar b-roll", color:"#ea580c" },
-  { key:"edicao",      label:"Edição",        color:"#dc2626" },
-  { key:"faltapostar", label:"Falta postar",  color:"#2563eb" },
-  { key:"agendado",    label:"Agendado",      color:"#0891b2" },
-  { key:"publicado",   label:"Publicado",     color:"#16a34a" },
+  { key:"ideia",       label:"Ideia",         color:"#9db4c0" },
+  { key:"roteiro",     label:"Roteiro",       color:"#b8a4d8" },
+  { key:"aroll",       label:"A-roll",        color:"#d4b896" },
+  { key:"broll",       label:"B-roll",        color:"#c9a882" },
+  { key:"edicao",      label:"Editar",        color:"#c49494" },
+  { key:"faltapostar", label:"Editado",       color:"#8ab0c8" },
+  { key:"agendado",    label:"Agendado",      color:"#7ec8c8" },
+  { key:"publicado",   label:"Publicado",     color:"#86c49a" },
 ];
 // Built dynamically from state — use useStatusMap() hook inside components
 // or statusesToMap() for non-component contexts
@@ -197,11 +197,8 @@ function buildCalendarGrid(year, month) {
 
   const cells = [];
 
-  // Exactly 2 full rows (14 cells) of previous month, ending on the day before month starts
-  // The last of those 14 falls on the column just before firstDay in row 3
-  // So we show days: (prevMonthDays - 13 - firstDay) .. (prevMonthDays - firstDay)
-  // then firstDay padding cells to align current month column
-  for (let i = 13 + firstDay; i >= 0; i--) {
+  // Previous month padding — just enough to fill the first partial week
+  for (let i = firstDay - 1; i >= 0; i--) {
     const day = prevMonthDays - i;
     cells.push({ date: toISODate(py, pm, day), day, isCurrentMonth: false });
   }
@@ -209,13 +206,9 @@ function buildCalendarGrid(year, month) {
   // Current month
   for (let d = 1; d <= daysInMonth; d++) cells.push({ date: toISODate(year, month, d), day: d, isCurrentMonth: true });
 
-  // Fill remainder of last week so total is multiple of 7
+  // Next month padding — just enough to complete the last partial week
   const rem = cells.length % 7 === 0 ? 0 : 7 - (cells.length % 7);
   for (let d = 1; d <= rem; d++) cells.push({ date: toISODate(ny, nm, d), day: d, isCurrentMonth: false });
-
-  // Add exactly 14 more next-month days (2 full rows), starting after the partial fill
-  const nextStart = rem + 1;
-  for (let d = nextStart; d < nextStart + 14; d++) cells.push({ date: toISODate(ny, nm, d), day: d, isCurrentMonth: false });
 
   return cells;
 }
@@ -236,6 +229,24 @@ function countStats(html) {
   const text = htmlToPlainText(html).trim();
   return { chars: text.length, words: text===""?0:text.split(/\s+/).filter(Boolean).length };
 }
+function copyToClipboard(text, onSuccess) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => onSuccess && onSuccess(true)).catch(() => fallbackCopy(text, onSuccess));
+  } else {
+    fallbackCopy(text, onSuccess);
+  }
+}
+function fallbackCopy(text, onSuccess) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand("copy"); onSuccess && onSuccess(true); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
 function formatNumber(n) {
   if (!n && n !== 0) return "";
   const num = Number(n); if (isNaN(num)) return String(n);
@@ -246,9 +257,16 @@ function formatNumber(n) {
 
 // ─── REDUCER ─────────────────────────────────────────────────────────────────
 
+function mergeStatuses(saved) {
+  const defaults = Object.fromEntries(DEFAULT_STATUSES.map(s => [s.key, s]));
+  const merged = (saved || DEFAULT_STATUSES).map(s => defaults[s.key] ? { ...s, color: defaults[s.key].color, label: defaults[s.key].label } : s);
+  DEFAULT_STATUSES.forEach(d => { if (!merged.find(s => s.key === d.key)) merged.push(d); });
+  return merged;
+}
+
 function appReducer(state, action) {
   switch (action.type) {
-    case "HYDRATE": return { ...action.state };
+    case "HYDRATE": return { ...action.state, statuses: mergeStatuses(action.state.statuses) };
     case "ADD_NOTE": {
       const { note } = action;
       // Guard: never add a note whose id already exists on that date
@@ -370,7 +388,7 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, statuses:DEFAULT_STATUSES, ...parsed };
+      if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) };
     }
   } catch(e) {}
   return buildSampleState();
@@ -381,7 +399,7 @@ async function loadStateFromStorage() {
     const result = await window.storage.get(STORAGE_KEY);
     if (result && result.value) {
       const parsed = JSON.parse(result.value);
-      if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, statuses:DEFAULT_STATUSES, ...parsed };
+      if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) };
     }
   } catch(e) {}
   return null;
@@ -419,11 +437,14 @@ function buildSampleState() {
 
 // ─── RICH TEXT EDITOR ─────────────────────────────────────────────────────────
 
-function RichEditor({ value, onChange, title }) {
+function RichEditor({ value, onChange, title, isMobile }) {
   const editorRef   = useRef(null);
   const focusRef    = useRef(null);
   const initialized = useRef(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [colorMode, setColorMode] = useState("camera"); // "camera" = a-roll (black), "broll" = b-roll (green)
+  const [isEditing, setIsEditing] = useState(false);
+  const toolbarHideTimer = useRef(null);
 
   useEffect(() => {
     if (editorRef.current && !initialized.current) {
@@ -451,13 +472,21 @@ function RichEditor({ value, onChange, title }) {
     return () => window.removeEventListener("keydown", h);
   }, [focusMode]);
 
+  // Listen for external focus mode trigger (from editor menu)
+  useEffect(() => {
+    const h = () => setFocusMode(true);
+    document.addEventListener("calendarNotes:focusMode", h);
+    return () => document.removeEventListener("calendarNotes:focusMode", h);
+  }, []);
+
   const exec = (cmd, ref) => { ref?.focus(); document.execCommand(cmd, false, null); sync(ref); };
   const sync = ref => onChange((ref || editorRef.current)?.innerHTML || "");
   const toggleColor = ref => {
-    const sel = window.getSelection(); if (!sel || sel.rangeCount === 0) return;
-    const node = sel.getRangeAt(0).commonAncestorContainer, el = node.nodeType === 3 ? node.parentElement : node;
-    document.execCommand("foreColor", false, window.getComputedStyle(el).color === "rgb(80, 149, 110)" ? CAMERA_COLOR : BROLL_COLOR);
+    const nextColor = colorMode === "camera" ? BROLL_COLOR : CAMERA_COLOR;
+    ref?.focus();
+    document.execCommand("foreColor", false, nextColor);
     sync(ref);
+    setColorMode(prev => prev === "camera" ? "broll" : "camera");
   };
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
@@ -491,22 +520,18 @@ function RichEditor({ value, onChange, title }) {
     );
   };
 
-  const Toolbar = ({ targetRef, isFocus }) => (
-    <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"10px 20px", borderBottom:`1px solid ${isFocus?"rgba(255,255,255,0.1)":"#d4e4d4"}`, backgroundColor:isFocus?"rgba(255,255,255,0.04)":"#faf6ef", flexShrink:0, flexWrap:"wrap" }}>
+  const Toolbar = ({ targetRef, isFocus, colorMode, visible }) => (
+    <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"10px 20px", borderBottom:`1px solid ${isFocus?"rgba(255,255,255,0.1)":"#d4e4d4"}`, backgroundColor:isFocus?"rgba(255,255,255,0.04)":"#faf6ef", flexShrink:0, flexWrap:"wrap", maxHeight: visible ? "60px" : "0", overflow:"hidden", opacity: visible ? 1 : 0, transition:"max-height 0.25s ease, opacity 0.2s ease", paddingTop: visible ? "10px" : "0", paddingBottom: visible ? "10px" : "0" }}>
       <TooltipBtn shortcut={`${mod} + B`} isFocus={isFocus} style={{ ...btn, ...(isFocus?{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",color:"#e8e0d4"}:{}) }} onMouseDown={e=>{e.preventDefault();exec("bold",targetRef?.current);}}><b>N</b></TooltipBtn>
       <TooltipBtn shortcut={`${mod} + I`} isFocus={isFocus} style={{ ...btn, fontStyle:"italic", ...(isFocus?{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",color:"#e8e0d4"}:{}) }} onMouseDown={e=>{e.preventDefault();exec("italic",targetRef?.current);}}>I</TooltipBtn>
       <TooltipBtn shortcut={`${mod} + U`} isFocus={isFocus} style={{ ...btn, textDecoration:"underline", ...(isFocus?{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",color:"#e8e0d4"}:{}) }} onMouseDown={e=>{e.preventDefault();exec("underline",targetRef?.current);}}>S</TooltipBtn>
       <div style={{ width:"1px", height:"22px", background:isFocus?"rgba(255,255,255,0.15)":"#ddd0bc", margin:"0 4px", flexShrink:0 }} />
-      <TooltipBtn shortcut={`${mod} + T`} isFocus={isFocus} style={{ ...btn, padding:"6px 14px", gap:"8px", ...(isFocus?{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",color:"#e8e0d4"}:{}) }} onMouseDown={e=>{e.preventDefault();toggleColor(targetRef?.current);}}>
-        <span style={{ width:"13px", height:"13px", borderRadius:"50%", flexShrink:0, background:`linear-gradient(135deg, ${CAMERA_COLOR} 50%, ${BROLL_COLOR} 50%)`, display:"inline-block" }} />
-        Alternar cor
+      <TooltipBtn shortcut={`${mod} + T`} isFocus={isFocus} style={{ ...btn, padding:"6px 14px", gap:"7px", ...(isFocus?{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",color:"#e8e0d4"}:{}) }} onMouseDown={e=>{e.preventDefault();toggleColor(targetRef?.current);}}>
+        <span style={{ width:"10px", height:"10px", borderRadius:"50%", flexShrink:0, backgroundColor: colorMode === "camera" ? CAMERA_COLOR : BROLL_COLOR, display:"inline-block" }} />
+        <span style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", fontWeight:700, color: isFocus ? "rgba(255,255,255,0.85)" : colorMode === "camera" ? CAMERA_COLOR : BROLL_COLOR }}>
+          {colorMode === "camera" ? "a-roll" : "b-roll"}
+        </span>
       </TooltipBtn>
-      {!isFocus && (
-        <div style={{ display:"flex", gap:"14px", marginLeft:"6px", alignItems:"center" }}>
-          <span style={{ display:"flex", alignItems:"center", gap:"5px" }}><span style={{ width:"9px", height:"9px", borderRadius:"50%", background:CAMERA_COLOR, display:"inline-block" }} /><span style={{ fontSize:"11px", color:CAMERA_COLOR, fontFamily:"'DM Mono', monospace", fontWeight:600 }}>a-roll</span></span>
-          <span style={{ display:"flex", alignItems:"center", gap:"5px" }}><span style={{ width:"9px", height:"9px", borderRadius:"50%", background:BROLL_COLOR, display:"inline-block" }} /><span style={{ fontSize:"11px", color:BROLL_COLOR, fontFamily:"'DM Mono', monospace", fontWeight:600 }}>b-roll</span></span>
-        </div>
-      )}
       <div style={{ flex:1 }} />
       {isFocus
         ? <button onMouseDown={e=>{e.preventDefault();setFocusMode(false);}} style={{ padding:"5px 12px", borderRadius:"6px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"11px", fontFamily:"'DM Mono', monospace", cursor:"pointer", letterSpacing:"0.04em" }}>Esc · Sair do foco</button>
@@ -519,16 +544,20 @@ function RichEditor({ value, onChange, title }) {
     <>
 
       <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
-        <Toolbar targetRef={editorRef} isFocus={false} />
-        <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={() => sync(editorRef.current)}
-          onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&["b","i","u"].includes(e.key.toLowerCase()))setTimeout(()=>sync(editorRef.current),0); if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();toggleColor(editorRef.current);}}}
-          data-placeholder="Comece a escrever seu roteiro..."
-          style={{ flex:1, overflowY:"auto", padding:"32px 48px", fontSize:"14px", lineHeight:"1.85", color:CAMERA_COLOR, fontFamily:"'Inter', sans-serif", outline:"none", caretColor:CAMERA_COLOR, backgroundColor:"#fdf9f4" }}
-        />
+        <Toolbar targetRef={editorRef} isFocus={false} colorMode={colorMode} visible={isEditing} />
+        <div style={{ flex:1, overflowY: isMobile ? "visible" : "auto", backgroundColor:"#fdf9f4" }}>
+          <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={() => sync(editorRef.current)}
+            onFocus={() => { clearTimeout(toolbarHideTimer.current); setIsEditing(true); }}
+            onBlur={() => { toolbarHideTimer.current = setTimeout(() => setIsEditing(false), 200); }}
+            onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&["b","i","u"].includes(e.key.toLowerCase()))setTimeout(()=>sync(editorRef.current),0); if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();toggleColor(editorRef.current);}}}
+            data-placeholder="Comece a escrever seu roteiro..."
+            style={{ maxWidth:"680px", margin:"0 auto", minHeight: isMobile ? "50vh" : "100%", padding: isMobile ? "28px 24px 48px" : "48px 24px 64px", fontSize:"15px", lineHeight:"1.9", color:CAMERA_COLOR, fontFamily:"'Inter', sans-serif", outline:"none", caretColor:CAMERA_COLOR, boxSizing:"border-box", width:"100%" }}
+          />
+        </div>
       </div>
       {focusMode && (
         <div style={{ position:"fixed", inset:0, zIndex:9000, backgroundColor:"#1a2218", display:"flex", flexDirection:"column", animation:"fadeIn 0.2s ease" }}>
-          <Toolbar targetRef={focusRef} isFocus={true} />
+          <Toolbar targetRef={focusRef} isFocus={true} colorMode={colorMode} visible={true} />
           {title && (
             <div style={{ textAlign:"center", padding:"32px 0 0", fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.25)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.1em", textTransform:"uppercase" }}>{title}</div>
           )}
@@ -1118,12 +1147,40 @@ function TitleField({ lbl, val, set, ph, win, dim, hasMany, onToggleWinner }) {
 
 
 
+// ─── TITLE ABC ROW ────────────────────────────────────────────────────────────
+
+function TitleABCRow({ lbl, val, set, ph, win, onToggleWinner }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
+      style={{ marginBottom:"10px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:"5px", marginBottom:"3px" }}>
+        <span style={{ fontSize:"9px", fontWeight:700, color: win ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.25)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>{lbl}</span>
+        <button onClick={onToggleWinner}
+          style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", opacity: (hovered || win) ? 1 : 0, transition:"opacity 0.15s" }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill={win ? "#f5c842" : "none"} stroke={win ? "#f5c842" : "rgba(255,255,255,0.45)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </button>
+      </div>
+      <textarea value={val} onChange={e=>{set(e.target.value);e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+        ref={el=>{if(el){el.style.height="auto";el.style.height=el.scrollHeight+"px";}}}
+        placeholder={ph} rows={1}
+        onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}
+        className="green-input"
+        style={{ display:"block", width:"100%", fontSize:"15px", fontWeight: win ? 700 : 500, lineHeight:"1.4", border:"none", borderBottom:`1px solid ${win ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, outline:"none", color: win ? "#fff" : "rgba(255,255,255,0.75)", backgroundColor:"transparent", padding:"2px 0 6px", caretColor:"#fff", fontFamily:"'Inter', sans-serif", resize:"none", overflow:"hidden", boxSizing:"border-box" }} />
+    </div>
+  );
+}
+
 // ─── NOTE EDITOR ──────────────────────────────────────────────────────────────
 
 function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, onCloseAll, onDelete }) {
   const STATUS_MAP = useStatusMap();
   const isMobile = useIsMobile();
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const isNew = !note;
   const [title, setTitle]           = useState(note?.title       || "");
   const [content, setContent]       = useState(note?.content     || "");
@@ -1175,9 +1232,11 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   ];
   const [perf, setPerf]             = useState(note?.perf          || {});
   const perfUnlocked = noteDate && (Date.now() - new Date(noteDate + "T00:00:00").getTime()) >= 24*60*60*1000;
+  const [titlesCollapsed, setTitlesCollapsed] = useState(true);
+  const [propPatrocinador, setPropPatrocinador] = useState(note?.propPatrocinador || "");
 
   useEffect(() => { if (size === "small" && (status === "aroll" || status === "broll")) setStatus("ideia"); }, [size]);
-  const [sidebarOrder, setSidebarOrder] = useState(["titulo","data","status","descricao","insercoes","tags","perf","moodboard"]);
+  const [sidebarOrder, setSidebarOrder] = useState(["titulos","data","status","descricao","insercoes","tags","perf","moodboard"]);
   const [sidebarReorder, setSidebarReorder] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState({ moodboard: true });
   const sidebarDragRef = useRef(null);
@@ -1206,7 +1265,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
     content, size, status,
     date: noteDate,
     tags, insercoes, perf, broll,
-    moodboard,
+    moodboard, propPatrocinador,
   });
   latestSaveFn.current = onSaveSilent || onSave;
 
@@ -1237,7 +1296,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
       setTimeout(() => setSaved(false), 1600);
     }, 2000);
     return () => clearTimeout(debounceTimer.current);
-  }, [title, titleB, titleC, titleWinner, content, size, status, noteDate, tags, insercoes, perf, broll, moodboard]);
+  }, [title, titleB, titleC, titleWinner, content, size, status, noteDate, tags, insercoes, perf, broll, moodboard, propPatrocinador]);
 
   // ── Cmd/Ctrl+S manual save ─────────────────────────────────────────────────
   const handleSaveWithMood = useCallback(() => {
@@ -1265,49 +1324,30 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   const [editorTab, setEditorTab] = useState("roteiro");
 
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:2000, display:"flex", flexDirection: isMobile ? "column" : "row", backgroundColor:SAGE, animation:"editorEnter 0.2s cubic-bezier(0.4,0,0.2,1)" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:2000, display:"flex", flexDirection: isMobile ? "column" : "row", backgroundColor:SAGE, animation:"editorEnter 0.2s cubic-bezier(0.4,0,0.2,1)", overflowY: isMobile ? "auto" : "hidden" }}>
 
         {isMobile ? (
           <>
 
-            <div style={{ flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", backdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.25)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-              <button onClick={onCloseAll || onClose} style={{ ...ghostBtn, padding:"6px 10px", fontSize:"12px", display:"flex", alignItems:"center", gap:"6px" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                Voltar
+            <div style={{ position:"sticky", top:0, zIndex:100, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)", backgroundColor:"rgba(73,103,73,0.92)", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+              <button onClick={onCloseAll || onClose} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <button onClick={()=>setMobileSidebarOpen(v=>!v)}
-                style={{ ...ghostBtn, padding:"6px 12px", fontSize:"12px", border: mobileSidebarOpen ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.35)", backgroundColor: mobileSidebarOpen ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.08)", borderRadius:"8px" }}>
-                Detalhes
-              </button>
-              <button onClick={handleSaveWithMood} disabled={!title.trim()}
-                style={{ ...ghostBtn, padding:"7px 16px", fontSize:"13px", fontWeight:700, backgroundColor:saved?"rgba(5,150,105,0.7)":"rgba(255,255,255,0.18)", border:saved?"1px solid #6ee7b7":"1px solid rgba(255,255,255,0.38)", minWidth:"80px", opacity:title.trim()?1:0.45 }}>
-                {saved?"✓ Salvo!":"Salvar"}
+              {/* Tab switcher in topbar */}
+              <div style={{ display:"flex", position:"relative", backgroundColor:"rgba(0,0,0,0.2)", borderRadius:"10px", padding:"3px" }}>
+                <div style={{ position:"absolute", top:"3px", bottom:"3px", width:"76px", borderRadius:"7px", backgroundColor:"rgba(255,255,255,0.18)", transition:"transform 0.2s cubic-bezier(0.4,0,0.2,1)", transform: editorTab === "roteiro" ? "translateX(0)" : "translateX(76px)", pointerEvents:"none" }} />
+                {[{key:"roteiro", label:"Roteiro"},{key:"broll", label:"B-roll"}].map(({key,label}) => (
+                  <button key={key} onClick={()=>setEditorTab(key)}
+                    style={{ position:"relative", zIndex:1, width:"76px", padding:"5px 0", borderRadius:"7px", border:"none", cursor:"pointer", fontSize:"12px", fontWeight:600, fontFamily:"'Inter', sans-serif", background:"transparent", transition:"color 0.2s", textAlign:"center", color: editorTab===key ? "#fff" : "rgba(255,255,255,0.4)" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {/* Menu button */}
+              <button onClick={()=>setEditorMenuOpen(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
               </button>
             </div>
-            {mobileSidebarOpen && (
-              <div style={{ flexShrink:0, maxHeight:"45vh", overflowY:"auto", borderBottom:"1px solid rgba(255,255,255,0.08)", backgroundColor:"rgba(87,119,87,0.15)" }}
-                className="sidebar-scroll">
-                <div style={{ display:"flex", flexDirection:"column", gap:"16px", padding:"12px 14px 20px" }}>
-
-                  <div>
-                    <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
-                      {Object.entries(STATUS_MAP).filter(([k]) => size === "large" || (k !== "aroll" && k !== "broll")).map(([key, val]) => {
-                        const active = status === key;
-                        return <button key={key} onClick={()=>setStatus(key)}
-                          style={{ padding:"4px 10px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:active?700:500, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:active?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.07)", color:active?"#fff":"rgba(255,255,255,0.5)" }}>
-                          {val.label}
-                        </button>;
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data de publicação</div>
-                    <InlineDatePicker value={noteDate} onChange={v=>{setNoteDate(v);setDateError("");}} />
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         ) : (
         <div style={{ width:"320px", flexShrink:0, display:"flex", flexDirection:"column", borderRight:"1px solid rgba(255,255,255,0.08)", backgroundColor:"transparent", position:"relative" }}>
@@ -1322,7 +1362,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
             <div style={{ display:"flex", flexDirection:"column", gap: sidebarReorder ? "4px" : "20px", padding:"14px 14px 24px" }}>
                 {sidebarOrder.map((sectionKey, idx) => {
-                  const labelMap = { titulo:"Título", data:"Data de publicação", status:"Status", descricao:"Descrição", insercoes:"Inserções", tags:"Tags", perf:"Performance", moodboard:"Moodboard" };
+                  const labelMap = { titulos:"Títulos alt.", titulo:"Título", data:"Data de publicação", status:"Status", descricao:"Descrição", insercoes:"Inserções", tags:"Tags", perf:"Performance", moodboard:"Moodboard" };
 
                   const isHeld    = reorderHeld === idx;
 
@@ -1375,29 +1415,26 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                     </button>
                   );
 
-                  if (sectionKey === "titulo") {
+                  if (sectionKey === "titulos") {
                     const hasMany = (titleB.trim() || titleC.trim()) && size === "large";
                     const winA = titleWinner === "A", winB = titleWinner === "B", winC = titleWinner === "C";
                     const previewTitle = titleWinner === "B" ? titleB : titleWinner === "C" ? titleC : title;
                     return (
-                      <div key="titulo">
-                        <SectionHeader label="Título" />
+                      <div key="titulos">
+                        <SectionHeader label="Títulos alternativos" />
                         {isCollapsed && previewTitle.trim() && (
                           <div style={{ fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", lineHeight:1.5, padding:"4px 2px 0", marginTop:"-4px" }}>
-                            {titleWinner && (titleWinner === "B" ? titleB : titleWinner === "C" ? titleC : null) && (
-                              <Star size={9} strokeWidth={0} fill="#f5c842" style={{ marginRight:"5px", verticalAlign:"middle", display:"inline" }} />
-                            )}
+                            {titleWinner && <Star size={9} strokeWidth={0} fill="#f5c842" style={{ marginRight:"5px", verticalAlign:"middle", display:"inline" }} />}
                             {previewTitle}
                           </div>
                         )}
                         <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
                           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", display:"flex", flexDirection:"column", gap:"8px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
-                            <TitleField lbl="A" val={title} set={setTitle} ph="Título do vídeo..." win={winA} dim={hasMany && titleWinner && !winA} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winA ? null : "A")} />
+                            <TitleField lbl="A" val={title} set={setTitle} ph="Título principal..." win={winA} dim={hasMany && titleWinner && !winA} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winA ? null : "A")} />
                             {size === "large" && (<>
                               <TitleField lbl="B" val={titleB} set={setTitleB} ph="Título alternativo B..." win={winB} dim={hasMany && titleWinner && !winB} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winB ? null : "B")} />
                               <TitleField lbl="C" val={titleC} set={setTitleC} ph="Título alternativo C..." win={winC} dim={hasMany && titleWinner && !winC} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winC ? null : "C")} />
                             </>)}
-
                           </div>
                         </div>
                       </div>
@@ -1656,11 +1693,18 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
         </div>
         )}
 
-        <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, minHeight:0, padding: isMobile ? "0 12px 16px" : "0 32px 32px" }}>
+        <div style={{ flex: isMobile ? "none" : 1, display:"flex", flexDirection:"column", minWidth:0, minHeight: isMobile ? "auto" : 0, padding: isMobile ? "0 12px 32px" : "0 32px 32px" }}>
 
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 0 14px", flexShrink:0 }}>
-            {!isMobile && <button onClick={onCloseAll||onClose} style={{ ...ghostBtn, padding:"7px 16px", fontSize:"13px" }}>← Voltar</button>}
+          <div style={{ display:"flex", alignItems:"center", justifyContent: isMobile ? "flex-end" : "space-between", padding:"14px 0 14px", flexShrink:0 }}>
+            {!isMobile && (
+              <button onClick={onCloseAll||onClose} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.6)" }}
+                onMouseEnter={e=>e.currentTarget.style.color="#fff"}
+                onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.6)"}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+            )}
 
+            {!isMobile && (
             <div style={{ display:"flex", position:"relative", backgroundColor:"rgba(0,0,0,0.2)", borderRadius:"10px", padding:"3px", gap:"0" }}>
               <div style={{ position:"absolute", top:"3px", bottom:"3px", width:"88px", borderRadius:"7px", backgroundColor:"rgba(255,255,255,0.18)", transition:"transform 0.2s cubic-bezier(0.4,0,0.2,1)", transform: editorTab === "roteiro" ? "translateX(0)" : "translateX(88px)", pointerEvents:"none" }} />
               {[{key:"roteiro", label:"Roteiro"},{key:"broll", label:"B-roll"}].map(({key,label}) => (
@@ -1671,32 +1715,169 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                 </button>
               ))}
             </div>
+            )}
             <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-              {!isNew && <DeleteConfirmButton onConfirm={()=>{onDelete();onClose();}} ghostBtn={ghostBtn} />}
-              {!isMobile && <button onClick={handleSaveWithMood} disabled={!title.trim()} style={{ ...ghostBtn, padding:"7px 22px", fontSize:"13px", fontWeight:700, backgroundColor:saved?"rgba(5,150,105,0.7)":"rgba(255,255,255,0.18)", border:saved?"1px solid #6ee7b7":"1px solid rgba(255,255,255,0.38)", minWidth:"96px", opacity:title.trim()?1:0.45 }}>{saved?"✓ Salvo!":"Salvar"}</button>}
+              {saved && !isMobile && <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.4)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}>✓ salvo</span>}
+              {!isMobile && <button onClick={()=>setEditorMenuOpen(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.55)" }}
+                onMouseEnter={e=>e.currentTarget.style.color="#fff"}
+                onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.55)"}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+              </button>}
             </div>
           </div>
-        <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
+        <div style={{ flex: isMobile ? "none" : 1, display:"flex", flexDirection:"column", minHeight: isMobile ? "auto" : 0 }}>
+
+        {/* Mobile Notion-style header — title + properties */}
+        {isMobile && (
+          <div style={{ flexShrink:0, marginBottom:"10px" }}>
+
+            {/* Collapsible A/B/C titles */}
+            <div style={{ marginBottom:"4px" }}>
+              {titlesCollapsed ? (
+                /* Collapsed: show title A as big editable heading + chevron */
+                <div style={{ display:"flex", alignItems:"flex-start", gap:"8px" }}>
+                  <textarea value={title} onChange={e=>{setTitle(e.target.value);e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+                    ref={el=>{if(el){el.style.height="auto";el.style.height=el.scrollHeight+"px";}}}
+                    placeholder="Título do vídeo..."
+                    rows={1}
+                    className="green-input mobile-title-input"
+                    style={{ flex:1, fontSize:"26px", fontWeight:800, lineHeight:"1.2", border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", padding:"8px 0 10px", caretColor:"#fff", fontFamily:"'Inter', sans-serif", resize:"none", overflow:"hidden", letterSpacing:"-0.01em" }} />
+                  <button onClick={()=>setTitlesCollapsed(false)}
+                    style={{ background:"none", border:"none", cursor:"pointer", padding:"10px 0 0", color:"rgba(255,255,255,0.3)", flexShrink:0, display:"flex", alignItems:"center" }}
+                    onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,0.7)"}
+                    onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.3)"}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </div>
+              ) : (
+                /* Expanded: show all three title fields */
+                <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", padding:"14px 16px", marginBottom:"8px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
+                    <span style={{ fontSize:"10px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Teste de títulos</span>
+                    <button onClick={()=>setTitlesCollapsed(true)}
+                      style={{ background:"none", border:"none", cursor:"pointer", padding:"2px", color:"rgba(255,255,255,0.3)", display:"flex", alignItems:"center" }}
+                      onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,0.7)"}
+                      onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.3)"}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                    </button>
+                  </div>
+                  {[
+                    { lbl:"A", val:title,  set:setTitle,  ph:"—", win:titleWinner==="A" },
+                    { lbl:"B", val:titleB, set:setTitleB, ph:"—", win:titleWinner==="B" },
+                    { lbl:"C", val:titleC, set:setTitleC, ph:"—", win:titleWinner==="C" },
+                  ].map(({ lbl, val, set, ph, win }) => (
+                    <TitleABCRow key={lbl} lbl={lbl} val={val} set={set} ph={ph} win={win}
+                      onToggleWinner={()=>setTitleWinner(titleWinner===lbl ? null : lbl)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Properties */}
+            <div style={{ display:"flex", flexDirection:"column", gap:"0px" }}>
+
+              {/* Status */}
+              <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"110px", flexShrink:0 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                  <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
+                </div>
+                <div style={{ flex:1, padding:"6px 0" }}>
+                  <button onClick={()=>setStatusOpen(true)}
+                    style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:(STATUS_MAP[status]||STATUS_MAP.ideia).color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                    {(STATUS_MAP[status]||STATUS_MAP.ideia).label}
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {statusOpen && (
+                    <div onClick={()=>setStatusOpen(false)}
+                      style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
+                      <div onClick={e=>e.stopPropagation()}
+                        style={{ backgroundColor:SAGE, borderRadius:"20px 20px 0 0", width:"100%", paddingBottom:"env(safe-area-inset-bottom, 16px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
+                        <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
+                          <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
+                        </div>
+                        <div style={{ padding:"6px 18px 14px", fontSize:"11px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Status</div>
+                        <div style={{ display:"flex", flexDirection:"column" }}>
+                          {Object.entries(STATUS_MAP).filter(([k])=>size==="large"||(k!=="aroll"&&k!=="broll")).map(([key,val])=>{
+                            const a = status===key;
+                            return (
+                              <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); }}
+                                style={{ display:"flex", alignItems:"center", gap:"12px", padding:"14px 20px", border:"none", background: a ? "rgba(255,255,255,0.08)" : "transparent", cursor:"pointer", textAlign:"left", fontFamily:"'Inter', sans-serif" }}>
+                                <span style={{ width:"10px", height:"10px", borderRadius:"50%", backgroundColor:val.color, flexShrink:0 }} />
+                                <span style={{ fontSize:"15px", fontWeight: a ? 700 : 400, color: a ? "#fff" : "rgba(255,255,255,0.7)" }}>{val.label}</span>
+                                {a && <svg style={{ marginLeft:"auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ height:"20px" }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Date */}
+              <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"110px", flexShrink:0 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Publicação</span>
+                </div>
+                <div style={{ flex:1, padding:"6px 0" }}>
+                  <button onClick={()=>setDateOpen(true)}
+                    style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                    {noteDate ? (() => { const [y,m,d]=noteDate.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {dateOpen && (
+                    <div onClick={()=>setDateOpen(false)}
+                      style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
+                      <div onClick={e=>e.stopPropagation()}
+                        style={{ backgroundColor:"#4C684C", borderRadius:"20px 20px 0 0", width:"100%", paddingBottom:"env(safe-area-inset-bottom, 16px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
+                        <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
+                          <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
+                        </div>
+                        <div style={{ padding:"12px 24px 20px" }}>
+                          <InlineDatePicker value={noteDate} onChange={v=>{ setNoteDate(v); setDateError(""); setDateOpen(false); }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Patrocinador */}
+              <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                <span style={{ width:"110px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Patrocinador</span>
+                <input
+                  value={propPatrocinador}
+                  onChange={e => setPropPatrocinador(e.target.value)}
+                  placeholder="—"
+                  style={{ flex:1, background:"none", border:"none", outline:"none", fontSize:"13px", color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", padding:"2px 0", caretColor:"#fff" }}
+                />
+              </div>
+
+              {insercoes.length > 0 && (
+                <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"110px", flexShrink:0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                    <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Inserções</span>
+                  </div>
+                  <div style={{ flex:1, display:"flex", gap:"5px", flexWrap:"wrap", padding:"6px 0" }}>
+                    {insercoes.map((ins,i) => (
+                      <span key={i} style={{ fontSize:"11px", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.7)", borderRadius:"4px", padding:"2px 8px", fontFamily:"'DM Mono', monospace" }}>{ins.label}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
 
         {editorTab === "roteiro" && (
-        <div style={{ flex:1, display:"flex", flexDirection:"column", backgroundColor:"#fdf9f4", minHeight:0, overflow:"hidden", borderRadius:"16px", boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
-          <RichEditor value={content} onChange={setContent} title={title} />
-
-        {(() => {
-          const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
-          const mod = isMac ? "Command + " : "Ctrl + ";
-          return (
-            <div style={{ padding:"7px 24px", borderTop:"1px solid #e0d5c5", display:"flex", alignItems:"center", gap:"16px", backgroundColor:"#faf6ef", flexShrink:0, borderRadius:"0 0 16px 16px" }}>
-              <span style={{ fontSize:"11px", color:"#c0aa90", fontFamily:"'DM Mono', monospace" }}>{mod}S · selecione o texto antes de formatar</span>
-              <div style={{ flex:1 }} />
-              <span style={{ fontSize:"11px", color:"#8a7060", fontFamily:"'DM Mono', monospace" }}>{stats.words.toLocaleString("pt-BR")} palavras</span>
-              <span style={{ fontSize:"11px", color:"#c0aa90", fontFamily:"'DM Mono', monospace" }}>·</span>
-              <span style={{ fontSize:"11px", color:"#8a7060", fontFamily:"'DM Mono', monospace" }}>{stats.chars.toLocaleString("pt-BR")} caracteres</span>
-              <span style={{ fontSize:"11px", color:"#c0aa90", fontFamily:"'DM Mono', monospace" }}>·</span>
-              <span style={{ fontSize:"11px", color:"#8a7060", fontFamily:"'DM Mono', monospace" }}>~{Math.max(1, Math.round(stats.words / 173))} min</span>
-            </div>
-          );
-        })()}
+        <div style={{ flex: isMobile ? "none" : 1, display:"flex", flexDirection:"column", backgroundColor:"#fdf9f4", minHeight: isMobile ? "60vh" : 0, overflow:"hidden", borderRadius:"16px", boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
+          <RichEditor value={content} onChange={setContent} title={title} isMobile={isMobile} />
         </div>
         )}
 
@@ -1819,78 +2000,199 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
         </div>
         </div>
+
+      {/* ── EDITOR MENU ── */}
+      {editorMenuOpen && (
+        <div onClick={()=>setEditorMenuOpen(false)}
+          style={{ position:"fixed", inset:0, zIndex:5000, backgroundColor:"rgba(0,0,0,0.35)", backdropFilter:"blur(4px)", animation:"fadeIn 0.15s ease" }}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{ position:"absolute", top: isMobile ? "56px" : "60px", right:"12px", width:"230px", borderRadius:"12px", backgroundColor:SAGE, border:"1px solid rgba(255,255,255,0.12)", boxShadow:"0 12px 40px rgba(0,0,0,0.45)", overflow:"hidden", animation:"slideUp 0.18s ease" }}>
+
+            {/* Header */}
+            {/* Stats block */}
+            {editorTab === "roteiro" && (
+              <div style={{ padding:"12px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", flexDirection:"column", gap:"6px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>palavras</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.words.toLocaleString("pt-BR")}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>caracteres</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.chars.toLocaleString("pt-BR")}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>tempo de leitura</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>~{Math.max(1, Math.round(stats.words / 173))} min</span>
+                </div>
+              </div>
+            )}
+
+            {/* Items */}
+            <div style={{ padding:"5px 5px 5px" }}>
+              {[
+                ...(editorTab === "roteiro" ? [{
+                  label: "Modo foco",
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M21 8V5a2 2 0 00-2-2h-3"/><path d="M3 16v3a2 2 0 002 2h3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>,
+                  onClick: () => { setEditorMenuOpen(false); document.dispatchEvent(new CustomEvent("calendarNotes:focusMode")); }
+                }] : []),
+                {
+                  label: "Mover para a lixeira",
+                  icon: <Trash2 size={14} strokeWidth={2} />,
+                  onClick: () => { setEditorMenuOpen(false); onDelete && onDelete(); onClose && onClose(); }
+                },
+                {
+                  label: "Exportar nota",
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+                  onClick: () => {
+                    setEditorMenuOpen(false);
+                    const payload = { title, titleB, titleC, titleWinner, content, status, date: noteDate, tags, insercoes, size };
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `${(title||"nota").slice(0,40).replace(/[^a-z0-9]/gi,"-")}.json`;
+                    a.click();
+                  }
+                },
+                {
+                  label: "Copiar link da nota",
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
+                  onClick: () => {
+                    setEditorMenuOpen(false);
+                    const id = note?.id || "";
+                    const url = `${window.location.origin}${window.location.pathname}#nota-${id}`;
+                    copyToClipboard(url, setSaved);
+                  }
+                },
+                {
+                  label: "Copiar texto do roteiro",
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>,
+                  onClick: () => {
+                    setEditorMenuOpen(false);
+                    const plain = htmlToPlainText(content);
+                    copyToClipboard(plain, setSaved);
+                  }
+                },
+              ].map(({label, icon, onClick}) => (
+                <button key={label} onClick={onClick}
+                  style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:"none", background:"none", cursor:"pointer", width:"100%", textAlign:"left", color:"rgba(255,255,255,0.8)", fontFamily:"'Inter', sans-serif", fontSize:"13px", fontWeight:500, transition:"background 0.1s" }}
+                  onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"}
+                  onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                  <span style={{ color:"rgba(255,255,255,0.4)", display:"flex", alignItems:"center", flexShrink:0 }}>{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
 // ─── POST VIEW MODAL ──────────────────────────────────────────────────────────
 
+// ─── TIME INPUT ───────────────────────────────────────────────────────────────
+
+function TimeInput({ value, onChange }) {
+  const [h, m] = (value || "00:00").split(":").map(Number);
+
+  const setHours   = e => { const n = Math.max(0, Math.min(23, Number(e.target.value))); onChange(`${String(n).padStart(2,"0")}:${String(m).padStart(2,"0")}`); };
+  const setMinutes = e => { const n = Math.max(0, Math.min(59, Number(e.target.value))); onChange(`${String(h).padStart(2,"0")}:${String(n).padStart(2,"0")}`); };
+
+  const numStyle = { fontSize:"11px", fontFamily:"'DM Mono', monospace", fontWeight:600, color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", border:"none", outline:"none", width:"22px", textAlign:"center", padding:0, cursor:"text" };
+
+  return (
+    <div style={{ padding:"2px 10px", borderRadius:"20px", backgroundColor:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", gap:"1px" }}>
+      <input type="number" min={0} max={23} value={String(h).padStart(2,"0")} onChange={setHours} style={numStyle} />
+      <span style={{ fontSize:"11px", fontWeight:600, color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", lineHeight:1 }}>:</span>
+      <input type="number" min={0} max={59} value={String(m).padStart(2,"0")} onChange={setMinutes} style={numStyle} />
+    </div>
+  );
+}
+
+// ─── DROPDOWN SHEET ──────────────────────────────────────────────────────────
+// Renders as a bottom sheet on mobile, dropdown below anchor on desktop
+
+function DropdownSheet({ anchorRef, open, onClose, children, width = 220 }) {
+  const isMobile = useIsMobile();
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (panelRef.current && !panelRef.current.contains(e.target) && (!anchorRef?.current || !anchorRef.current.contains(e.target))) onClose(); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || isMobile || !anchorRef?.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    const panelW = width;
+    let left = r.right - panelW;
+    if (left < 8) left = r.left;
+    setPos({ top: r.bottom + 6, left });
+  }, [open, isMobile, width]);
+
+  if (!open) return null;
+
+  if (isMobile) {
+    return (
+      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
+        <div ref={panelRef} onClick={e=>e.stopPropagation()} style={{ backgroundColor:SAGE, borderRadius:"20px 20px 0 0", width:"100%", paddingBottom:"env(safe-area-inset-bottom, 16px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
+          <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
+            <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
+          </div>
+          {children}
+          <div style={{ height:"8px" }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={panelRef} style={{ position:"fixed", top: pos.top, left: pos.left, zIndex:4000, width: `${width}px`, backgroundColor:"#2d4a2d", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"12px", boxShadow:"0 12px 40px rgba(0,0,0,0.45)", animation:"fadeIn 0.12s ease", overflow:"hidden" }}>
+      {children}
+    </div>
+  );
+}
+
 function PostViewModal({ note, onClose, onSave, onDelete }) {
   const STATUS_MAP = useStatusMap();
   const overlayRef = useRef(null);
   const titleRef   = useRef(null);
-  const dateRef    = useRef(null);
-  const IG_PINK    = "#e1306c";
+  const IG_PINK    = "#ffffff";
+  const statusAnchorRef = useRef(null);
+  const dateAnchorRef   = useRef(null);
+  const formatAnchorRef = useRef(null);
 
   const [title,    setTitle]   = useState(note.title     || "");
   const [caption,  setCaption] = useState(note.igCaption || "");
-  const [hashtags, setHashtags]= useState((note.igHashtags||[]).join(" "));
   const [status,   setStatus]  = useState(note.status    || "agendado");
   const [pubTime,  setPubTime] = useState(note.pubTime   || "09:00");
   const [date,     setDate]    = useState(note.date      || todayISO());
-  const [calOpen,  setCalOpen] = useState(false);
-  const [calPos,   setCalPos]  = useState({ top:0, left:0 });
+  const [igFormat, setIgFormat]= useState(note.igFormat  || "post");
   const [saved,    setSaved]   = useState(false);
-
-  const parsed = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(date+"T12:00:00") : new Date();
-  const [viewYear,  setViewYear]  = useState(parsed.getFullYear());
-  const [viewMonth, setViewMonth] = useState(parsed.getMonth());
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") { if (calOpen) setCalOpen(false); else onClose(); } };
+    const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, [onClose, calOpen]);
-  useEffect(() => {
-    if (!calOpen) return;
-    const h = e => { if (dateRef.current && !dateRef.current.contains(e.target)) setCalOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [calOpen]);
+  }, [onClose]);
 
   const handleSave = () => {
-    const tags = hashtags.split(/[\s,]+/).map(t=>t.replace(/^#+/,"").trim().toLowerCase()).filter(Boolean);
-    onSave({ ...note, title:title.trim(), igCaption:caption, igHashtags:tags, status, pubTime, date });
+    onSave({ ...note, title:title.trim(), igCaption:caption, igHashtags:[], status, pubTime, date, igFormat });
     setSaved(true); setTimeout(() => setSaved(false), 1600);
   };
-
-  const openCal = () => {
-    if (!dateRef.current) return;
-    const r = dateRef.current.getBoundingClientRect();
-    setCalPos({ top: r.bottom + 6, left: r.left });
-    setCalOpen(v => !v);
-  };
-  const selectDay = d => {
-    const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    setDate(iso); setCalOpen(false);
-  };
-  const prevMo = () => { if(viewMonth===0){setViewYear(y=>y-1);setViewMonth(11);}else setViewMonth(m=>m-1); };
-  const nextMo = () => { if(viewMonth===11){setViewYear(y=>y+1);setViewMonth(0);}else setViewMonth(m=>m+1); };
-
-  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay();
-  const prevDays    = new Date(viewYear, viewMonth, 0).getDate();
-  const cells = [];
-  for (let i = firstDow-1; i >= 0; i--) cells.push({ day: prevDays-i, cur:false });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day:d, cur:true });
-  while (cells.length % 7 !== 0) cells.push({ day: cells.length-firstDow-daysInMonth+1, cur:false });
 
   const displayDate = (() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Data";
     const [y,m,d] = date.split("-"); return `${d}/${m}/${y}`;
   })();
-
-  const pill = { display:"flex", alignItems:"center", gap:"7px", backgroundColor:"rgba(0,0,0,0.13)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"20px", padding:"7px 13px", fontFamily:"'DM Mono', monospace", fontSize:"12px", color:"rgba(255,255,255,0.85)", whiteSpace:"nowrap" };
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -1898,10 +2200,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"360px", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"visible", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"7px" }}>
-            <Instagram size={11} color={IG_PINK} strokeWidth={2.5} />
-            <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Post Instagram</span>
-          </div>
+          <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Postagem</span>
           <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
         </div>
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
@@ -1913,6 +2212,8 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
 
+          {/* Format selector */}
+
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
             <textarea value={caption} onChange={e=>setCaption(e.target.value)} rows={3}
               placeholder="Legenda do post..."
@@ -1920,71 +2221,94 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
               style={{ fontSize:"13px", border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif", resize:"none", lineHeight:"1.55" }} />
           </div>
 
-          <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
-            <input value={hashtags} onChange={e=>setHashtags(e.target.value)}
-              placeholder="#hashtag1 #hashtag2..."
-              className="green-input"
-              style={{ fontSize:"12px", border:"none", outline:"none", color:"rgba(255,255,255,0.75)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'DM Mono', monospace" }} />
-          </div>
-          <div style={{ display:"flex", gap:"8px" }}>
-            <div ref={dateRef} style={{ position:"relative", flex:1 }}>
-              <button onClick={openCal}
-                style={{ ...pill, width:"100%", cursor:"pointer", justifyContent:"flex-start", boxSizing:"border-box" }}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.35)"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.14)"}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                {displayDate}
-              </button>
-              {calOpen && (
-                <div style={{ position:"fixed", top:calPos.top, left:calPos.left, zIndex:9999, backgroundColor:"#1a2e1a", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"12px", padding:"12px", boxShadow:"0 16px 40px rgba(0,0,0,0.5)", width:"216px", animation:"fadeIn 0.12s ease", userSelect:"none" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
-                    <button onClick={prevMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>‹</button>
-                    <span style={{ fontSize:"11px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>{PT_MONTHS[viewMonth]} {viewYear}</span>
-                    <button onClick={nextMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>›</button>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
-                    {PT_DAYS.map((d,i)=><div key={i} style={{ textAlign:"center", fontSize:"8px", fontWeight:700, color:"rgba(255,255,255,0.28)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase" }}>{d}</div>)}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
-                    {cells.map((cell,i)=>{
-                      const iso=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
-                      const isSel=cell.cur&&iso===date; const isTod=cell.cur&&iso===todayISO();
-                      return (
-                        <button key={i} onClick={()=>cell.cur&&selectDay(cell.day)}
-                          style={{ padding:"5px 0", borderRadius:"5px", border:"none", background:isSel?SAGE:isTod?"rgba(87,119,87,0.4)":"transparent", color:isSel?"#fff":isTod?"#a8d4a8":cell.cur?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.18)", fontSize:"11px", fontFamily:"'DM Mono', monospace", fontWeight:isSel||isTod?700:400, cursor:cell.cur?"pointer":"default" }}
-                          onMouseEnter={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background="rgba(255,255,255,0.1)"; }}
-                          onMouseLeave={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background=isTod?"rgba(87,119,87,0.4)":"transparent"; }}>
-                          {cell.day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+          {/* Properties — Notion style */}
+          <div style={{ display:"flex", flexDirection:"column" }}>
+
+            {/* Criar (format) */}
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Criar</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={formatAnchorRef} onClick={()=>setFormatOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.18)", color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {igFormat.charAt(0).toUpperCase() + igFormat.slice(1)}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
             </div>
-            <label style={{ ...pill, cursor:"default" }}>
-              <Clock size={11} color="rgba(255,255,255,0.45)" strokeWidth={2} style={{flexShrink:0}} />
-              <input type="time" value={pubTime} onChange={e=>setPubTime(e.target.value)}
-                className="green-time"
-                style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", padding:0, width:"62px", caretColor:"#fff", cursor:"pointer" }} />
-            </label>
+
+            {/* Status */}
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={statusAnchorRef} onClick={()=>setStatusOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:(STATUS_MAP[status]||STATUS_MAP.ideia).color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {(STATUS_MAP[status]||STATUS_MAP.ideia).label}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Data */}
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Data</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Horário */}
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Horário</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <TimeInput value={pubTime} onChange={setPubTime} />
+              </div>
+            </div>
+
           </div>
-          <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
-              {Object.entries(STATUS_MAP).map(([key, val]) => {
-                const active = status === key;
+
+          {/* Format dropdown */}
+          <DropdownSheet anchorRef={formatAnchorRef} open={formatOpen} onClose={()=>setFormatOpen(false)} width={180}>
+            <div style={{ padding:"6px 6px" }}>
+              {[{key:"post",label:"Post"},{key:"stories",label:"Stories"},{key:"reels",label:"Reels"},{key:"live",label:"Live"}].map(({key,label}) => {
+                const a = igFormat === key;
                 return (
-                  <button key={key} onClick={()=>setStatus(key)}
-                    style={{ padding:"4px 10px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:active?700:500, fontFamily:"'DM Mono', monospace", cursor:"pointer", transition:"all 0.12s", backgroundColor:active?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.07)", color:active?"#fff":"rgba(255,255,255,0.5)", letterSpacing:"0.03em" }}>
-                    {val.label}
+                  <button key={key} onClick={()=>{ setIgFormat(key); setFormatOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px", padding:"9px 12px", borderRadius:"8px", border:"none", background: a?"rgba(255,255,255,0.1)":"transparent", cursor:"pointer", width:"100%", textAlign:"left", fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight: a?700:400 }}>
+                    {label}
+                    {a && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </DropdownSheet>
+
+          {/* Status dropdown */}
+          <DropdownSheet anchorRef={statusAnchorRef} open={statusOpen} onClose={()=>setStatusOpen(false)} width={200}>
+            <div style={{ padding:"6px 6px" }}>
+              {Object.entries(STATUS_MAP).map(([key, val]) => {
+                const a = status === key;
+                return (
+                  <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:"none", background: a?"rgba(255,255,255,0.1)":"transparent", cursor:"pointer", width:"100%", textAlign:"left", fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight: a?700:400 }}>
+                    <span style={{ width:"8px", height:"8px", borderRadius:"50%", backgroundColor:val.color, flexShrink:0 }} />
+                    {val.label}
+                    {a && <svg style={{ marginLeft:"auto" }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </button>
+                );
+              })}
+            </div>
+          </DropdownSheet>
+
+          {/* Date picker dropdown */}
+          <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
+            <div style={{ padding:"12px 16px 16px" }}>
+              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+            </div>
+          </DropdownSheet>
 
         </div>
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
@@ -2015,69 +2339,30 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
   const STATUS_MAP = useStatusMap();
   const overlayRef = useRef(null);
   const titleRef   = useRef(null);
-  const dateRef    = useRef(null);
+  const statusAnchorRef = useRef(null);
+  const dateAnchorRef   = useRef(null);
 
   const [title,   setTitle]   = useState(note.title  || "");
   const [date,    setDate]    = useState(note.date    || todayISO());
   const [pubTime, setPubTime] = useState(note.pubTime || "09:00");
   const [status,  setStatus]  = useState(note.status  || "ideia");
-  const [calOpen, setCalOpen] = useState(false);
-  const [calPos,  setCalPos]  = useState({ top:0, left:0 });
   const [saved,   setSaved]   = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  const parsed = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(date+"T12:00:00") : new Date();
-  const [viewYear,  setViewYear]  = useState(parsed.getFullYear());
-  const [viewMonth, setViewMonth] = useState(parsed.getMonth());
+  const statusKeys = Object.keys(STATUS_MAP).filter(k => note.size !== "small" || (k !== "aroll" && k !== "broll"));
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") { if (calOpen) setCalOpen(false); else onClose(); } };
+    const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, [onClose, calOpen]);
-  useEffect(() => {
-    if (!calOpen) return;
-    const h = e => { if (dateRef.current && !dateRef.current.contains(e.target)) setCalOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [calOpen]);
+  }, [onClose]);
 
   const handleSave = () => {
     if (!title.trim()) return;
     onSave({ ...note, title: title.trim(), date, pubTime, status });
     setSaved(true); setTimeout(() => { setSaved(false); onClose(); }, 800);
   };
-
-  const openCal = () => {
-    if (!dateRef.current) return;
-    const r = dateRef.current.getBoundingClientRect();
-    setCalPos({ top: r.bottom + 6, left: r.left });
-    setCalOpen(v => !v);
-  };
-
-  const selectDay = d => {
-    const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    setDate(iso); setCalOpen(false);
-  };
-
-  const prevMo = () => { if(viewMonth===0){setViewYear(y=>y-1);setViewMonth(11);}else setViewMonth(m=>m-1); };
-  const nextMo = () => { if(viewMonth===11){setViewYear(y=>y+1);setViewMonth(0);}else setViewMonth(m=>m+1); };
-
-  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay();
-  const prevDays    = new Date(viewYear, viewMonth, 0).getDate();
-  const cells = [];
-  for (let i = firstDow-1; i >= 0; i--) cells.push({ day: prevDays-i, cur:false });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day:d, cur:true });
-  while (cells.length % 7 !== 0) cells.push({ day: cells.length-firstDow-daysInMonth+1, cur:false });
-
-  const displayDate = (() => {
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Data";
-    const [y,m,d] = date.split("-"); return `${d}/${m}/${y}`;
-  })();
-
-  const pill = { display:"flex", alignItems:"center", gap:"7px", backgroundColor:"rgba(0,0,0,0.13)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"20px", padding:"7px 13px", fontFamily:"'DM Mono', monospace", fontSize:"12px", color:"rgba(255,255,255,0.85)", whiteSpace:"nowrap" };
-
-  const statusKeys = Object.keys(STATUS_MAP).filter(k => note.size !== "small" || (k !== "aroll" && k !== "broll"));
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -2103,67 +2388,54 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-          <div style={{ display:"flex", gap:"8px" }}>
 
-            <div ref={dateRef} style={{ position:"relative", flex:1 }}>
-              <button onClick={openCal}
-                style={{ ...pill, width:"100%", cursor:"pointer", justifyContent:"flex-start", boxSizing:"border-box" }}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.35)"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.14)"}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                {displayDate}
-              </button>
-              {calOpen && (
-                <div style={{ position:"fixed", top:calPos.top, left:calPos.left, zIndex:9999, backgroundColor:"#1a2e1a", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"12px", padding:"12px", boxShadow:"0 16px 40px rgba(0,0,0,0.5)", width:"216px", animation:"fadeIn 0.12s ease", userSelect:"none" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
-                    <button onClick={prevMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>‹</button>
-                    <span style={{ fontSize:"11px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>{PT_MONTHS[viewMonth]} {viewYear}</span>
-                    <button onClick={nextMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>›</button>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
-                    {PT_DAYS.map((d,i)=><div key={i} style={{ textAlign:"center", fontSize:"8px", fontWeight:700, color:"rgba(255,255,255,0.28)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase" }}>{d}</div>)}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
-                    {cells.map((cell,i)=>{
-                      const iso=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
-                      const isSel=cell.cur&&iso===date; const isTod=cell.cur&&iso===todayISO();
-                      return (
-                        <button key={i} onClick={()=>cell.cur&&selectDay(cell.day)}
-                          style={{ padding:"5px 0", borderRadius:"5px", border:"none", background:isSel?SAGE:isTod?"rgba(87,119,87,0.4)":"transparent", color:isSel?"#fff":isTod?"#a8d4a8":cell.cur?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.18)", fontSize:"11px", fontFamily:"'DM Mono', monospace", fontWeight:isSel||isTod?700:400, cursor:cell.cur?"pointer":"default" }}
-                          onMouseEnter={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background="rgba(255,255,255,0.1)"; }}
-                          onMouseLeave={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background=isTod?"rgba(87,119,87,0.4)":"transparent"; }}>
-                          {cell.day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+          {/* Properties */}
+          <div style={{ display:"flex", flexDirection:"column" }}>
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={statusAnchorRef} onClick={()=>setStatusOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:(STATUS_MAP[status]||STATUS_MAP.ideia).color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {(STATUS_MAP[status]||STATUS_MAP.ideia).label}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
             </div>
-            <label style={{ ...pill, cursor:"default" }}>
-              <Clock size={11} color="rgba(255,255,255,0.45)" strokeWidth={2} style={{flexShrink:0}} />
-              <input type="time" value={pubTime} onChange={e=>setPubTime(e.target.value)}
-                className="green-time"
-                style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", padding:0, width:"62px", caretColor:"#fff", cursor:"pointer" }} />
-            </label>
-          </div>
-          <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Status</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:"5px" }}>
-              {statusKeys.map(key => {
-                const val = STATUS_MAP[key];
-                const active = status === key;
-                return (
-                  <button key={key} onClick={()=>setStatus(key)}
-                    style={{ padding:"4px 10px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:active?700:500, fontFamily:"'DM Mono', monospace", cursor:"pointer", transition:"all 0.12s", backgroundColor: active ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.07)", color: active ? "#fff" : "rgba(255,255,255,0.5)", letterSpacing:"0.03em" }}>
-                    {val.label}
-                  </button>
-                );
-              })}
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Publicação</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Horário</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <TimeInput value={pubTime} onChange={setPubTime} />
+              </div>
             </div>
           </div>
+
+          <DropdownSheet anchorRef={statusAnchorRef} open={statusOpen} onClose={()=>setStatusOpen(false)} width={200}>
+            <div style={{ padding:"6px 6px" }}>
+              {statusKeys.map(key => { const val = STATUS_MAP[key]; const a = status===key; return (
+                <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); }}
+                  style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:"none", background:a?"rgba(255,255,255,0.1)":"transparent", cursor:"pointer", width:"100%", textAlign:"left", fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight:a?700:400 }}>
+                  <span style={{ width:"8px", height:"8px", borderRadius:"50%", backgroundColor:val.color, flexShrink:0 }} />
+                  {val.label}
+                  {a && <svg style={{ marginLeft:"auto" }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>
+              ); })}
+            </div>
+          </DropdownSheet>
+          <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
+            <div style={{ padding:"12px 16px 16px" }}>
+              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+            </div>
+          </DropdownSheet>
 
         </div>
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
@@ -2194,6 +2466,7 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
   const [icon,  setIcon]  = useState(milestone?.icon  || "star");
   const [date,  setDate]  = useState(milestone?.date  || initialDate || todayISO());
   const [saved, setSaved] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
@@ -2208,13 +2481,11 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
   };
 
   const ICONS = [
-    {key:"star",      Icon:MI.star},
-    {key:"mail",      Icon:MI.mail},
-    {key:"heart",     Icon:MI.heart},
-    {key:"users",     Icon:MI.users},
-    {key:"trophy",    Icon:MI.trophy},
-    {key:"box",       Icon:MI.box},
+    {key:"star",   Icon:MI.star},  {key:"mail",   Icon:MI.mail},
+    {key:"heart",  Icon:MI.heart}, {key:"users",  Icon:MI.users},
+    {key:"trophy", Icon:MI.trophy},{key:"box",    Icon:MI.box},
   ];
+  const dateAnchorRef = useRef(null);
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -2222,38 +2493,38 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
       <div style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"380px", maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"hidden", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif" }}>
 
         <div style={{ padding:"18px 20px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>{isNew ? "Novo marco" : "Editar marco"}</div>
-          </div>
+          <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Marco</div>
           <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
         </div>
         <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:"12px" }}>
 
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Título</div>
             <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
               onKeyDown={e=>{ if(e.key==="Enter" && title.trim()) handleSave(); }}
               placeholder="Ex: 10k seguidores no YouTube"
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-          <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"10px" }}>Ícone</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:"6px" }}>
-              {ICONS.map(({key,Icon}) => { const a = icon===key; return (
-                <button key={key} onClick={()=>setIcon(key)}
-                  style={{ aspectRatio:"1", borderRadius:"8px", border:"none", backgroundColor: a ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all 0.12s" }}
-                  onMouseEnter={e=>{ if(!a) e.currentTarget.style.backgroundColor="rgba(255,255,255,0.14)"; }}
-                  onMouseLeave={e=>{ if(!a) e.currentTarget.style.backgroundColor="rgba(255,255,255,0.08)"; }}>
-                  <Icon size={16} color={a ? "#fff" : "rgba(255,255,255,0.45)"} />
+
+          {/* Properties */}
+          <div style={{ display:"flex", flexDirection:"column" }}>
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Data</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
-              ); })}
+              </div>
             </div>
           </div>
-          <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Data</div>
-            <InlineDatePicker value={date} onChange={setDate} />
-          </div>
+
+          <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
+            <div style={{ padding:"12px 16px 16px" }}>
+              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+            </div>
+          </DropdownSheet>
 
         </div>
         <div style={{ padding:"14px 18px 18px", display:"flex", gap:"8px", flexShrink:0 }}>
@@ -2556,8 +2827,7 @@ function MilestoneChip({ milestone, isCurrentMonth, onDragStart, onQuickDelete, 
     <div draggable onDragStart={e=>{e.stopPropagation();onDragStart&&onDragStart(e,milestone);}}
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(milestone); }}
       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,milestone);}}
-      style={{ display:"flex", alignItems:"center", gap:"4px", backgroundColor:dimmed?"rgba(255,255,255,0.06)":"#577757", border:dimmed?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:"5px", padding:"2px 6px", marginBottom:"3px", overflow:"hidden", flexShrink:0, userSelect:"none", cursor:"grab" }}>
-      <MilestoneIconSmall icon={milestone.icon} category={milestone.category} dimmed={dimmed} />
+      style={{ display:"flex", alignItems:"center", gap:"4px", backgroundColor:dimmed?"rgba(255,255,255,0.06)":"#5F805E", border:dimmed?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:"5px", padding:"2px 6px", marginBottom:"3px", overflow:"hidden", flexShrink:0, userSelect:"none", cursor:"grab" }}>
       <span style={{ fontSize:"10px", fontWeight:dimmed?400:700, color:dimmed?"rgba(255,255,255,0.3)":"#ffffff", fontFamily:"'Inter', sans-serif", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{milestone.title}</span>
       {milestone.value && <span style={{ fontSize:"9px", fontWeight:700, color:dimmed?"rgba(255,255,255,0.25)":"#ffffff", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.8 }}>{formatNumber(milestone.value)}</span>}
     </div>
@@ -2686,36 +2956,28 @@ function NoteChip({ note, onDragStart, isCurrentMonth, onQuickDelete, onQuickEdi
   const dimmed = !isCurrentMonth;
   const IG_PINK = "#e1306c";
   const bg = selected ? "#3a5a3a" : dimmed ? "rgba(255,255,255,0.06)" : "#fdf9f4";
+
+  // Determine if the event is in the past
+  const isPast = note.date < todayISO();
+  const labelOpacity = isPast ? 0.4 : 1;
   return (
     <>
       <div draggable onDragStart={e=>{e.stopPropagation();onDragStart(e,note);}} onDragEnd={()=>{}}
         onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(note); }}
         onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,note);}}
         data-note-id={note.id} data-note-date={note.date}
-        style={{ backgroundColor: bg, border:`1px solid ${dimmed ? "rgba(255,255,255,0.08)" : isPost ? `${IG_PINK}33` : "rgba(0,0,0,0.06)"}`, borderRadius:"6px", padding:"5px 8px", marginBottom:"3px", overflow:"hidden", flexShrink:0, cursor:"grab", userSelect:"none", transition:"opacity 0.15s", outline: selected ? "1px solid rgba(122,184,122,0.4)" : "none" }}
+        style={{ backgroundColor: bg, border:`1px solid ${dimmed ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, borderRadius:"6px", padding:"5px 8px", marginBottom:"3px", overflow:"hidden", flexShrink:0, cursor:"grab", userSelect:"none", transition:"opacity 0.15s", outline: selected ? "1px solid rgba(122,184,122,0.4)" : "none" }}
         onMouseEnter={e=>{ if (!selected) e.currentTarget.style.opacity="0.75"; }}
         onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-          {isPost && !dimmed && (
-            <div style={{ display:"flex", alignItems:"center", gap:"4px", marginBottom:"1px" }}>
-              <Instagram size={8} color="#e1306c" strokeWidth={2.5} />
-              <span style={{ fontSize:"8px", fontWeight:700, color:"#e1306c", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>Post</span>
-              {note.pubTime && <span style={{ fontSize:"8px", color:"#b0a090", fontFamily:"'DM Mono', monospace", marginLeft:"auto" }}>{note.pubTime}</span>}
-            </div>
-          )}
-          {!isPost && isLarge && !dimmed && (
-            <div style={{ display:"flex", alignItems:"center", gap:"4px", marginBottom:"1px" }}>
-              <Youtube size={8} color="#FF0032" strokeWidth={2.5} />
-              <span style={{ fontSize:"8px", fontWeight:700, color:"#FF0032", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>Vídeo</span>
-              {note.pubTime && <span style={{ fontSize:"8px", color:"#b0a090", fontFamily:"'DM Mono', monospace", marginLeft:"auto" }}>{note.pubTime}</span>}
-            </div>
-          )}
           <div style={{ fontSize:"11px", fontWeight: dimmed ? 400 : 600, color: selected ? "#ffffff" : dimmed ? "rgba(255,255,255,0.3)" : "#3a2e24", wordBreak:"break-word", overflowWrap:"anywhere", lineHeight:"1.35", fontFamily:"'Inter', sans-serif", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{note.title}</div>
-          {!dimmed && isLarge && !isPost && (
-            <span style={{ fontSize:"8px", fontWeight:700, color: selected ? "#1e2e1e" : "#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: selected ? "#7ab87a" : status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", alignSelf:"flex-start" }}>{status.label}</span>
-          )}
-          {!dimmed && isPost && (
-            <span style={{ fontSize:"8px", fontWeight:700, color:"#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", alignSelf:"flex-start" }}>{status.label}</span>
+          {!dimmed && (isLarge || isPost) && (
+            <div style={{ display:"flex", alignItems:"center", gap:"4px" }}>
+              <span style={{ fontSize:"8px", fontWeight:700, color:"#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: isPost ? "#e1306c" : "#FF0032", borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{isPost ? "Post" : "Vídeo"}</span>
+              {!isPost && <span style={{ fontSize:"8px", fontWeight:700, color: selected ? "#3a5a3a" : "#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: selected ? "rgba(255,255,255,0.25)" : status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{status.label}</span>}
+              {isPost && <span style={{ fontSize:"8px", fontWeight:700, color:"#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{status.label}</span>}
+              {!isPast && note.pubTime && <span style={{ fontSize:"8px", color:"#b0a090", fontFamily:"'DM Mono', monospace", marginLeft:"auto" }}>{note.pubTime}</span>}
+            </div>
           )}
         </div>
       </div>
@@ -2741,72 +3003,153 @@ function ReminderChipInline({ reminder, isCurrentMonth, onDelete }) {
   );
 }
 
+// ─── MOBILE DAY MODAL ────────────────────────────────────────────────────────
+
+function MobileDayModal({ date, notes, milestones, reminders, today, onClose, onOpenNote, onOpenMilestone, onOpenReminder, onCreateNew }) {
+  const STATUS_MAP = useStatusMap();
+  const overlayRef = useRef(null);
+  const isToday = date === today;
+
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  const [y, m, d] = date.split("-").map(Number);
+  const dateLabel = new Date(y, m-1, d).toLocaleDateString("pt-BR", { weekday:"long", day:"numeric", month:"long" });
+  const dateCapitalized = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
+
+  const hasItems = notes.length > 0 || milestones.length > 0 || reminders.length > 0;
+
+  const createBtnStyle = { flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", backgroundColor:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"10px", padding:"9px 4px", color:"#fff", fontSize:"10px", fontWeight:600, cursor:"pointer", fontFamily:"'Inter', sans-serif", letterSpacing:"0.02em" };
+
+  return (
+    <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
+      style={{ position:"fixed", inset:0, zIndex:2500, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
+      <div style={{ backgroundColor:SAGE, borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 -8px 40px rgba(0,0,0,0.4)", animation:"slideUp 0.2s ease" }}>
+
+        {/* Handle bar */}
+        <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
+          <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
+        </div>
+
+        {/* Header */}
+        <div style={{ padding:"6px 18px 10px", flexShrink:0 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
+            <div>
+              <div style={{ fontSize:"14px", fontWeight:700, color:"#fff", fontFamily:"'Inter', sans-serif" }}>{dateCapitalized}</div>
+              {isToday && <div style={{ fontSize:"10px", color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", marginTop:"2px" }}>Hoje</div>}
+            </div>
+            <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.4)", fontSize:"20px", lineHeight:1, padding:"4px" }}>×</button>
+          </div>
+          {/* Creation buttons */}
+          <div style={{ display:"flex", gap:"8px" }}>
+            <button onClick={()=>{ onCreateNew("note"); onClose(); }} style={createBtnStyle}>
+              <Youtube size={15} color="#ffffff" strokeWidth={2} />
+              Roteiro
+            </button>
+            <button onClick={()=>{ onCreateNew("post"); onClose(); }} style={createBtnStyle}>
+              <Instagram size={15} color="#ffffff" strokeWidth={2} />
+              Post
+            </button>
+            <button onClick={()=>{ onCreateNew("reminder"); onClose(); }} style={createBtnStyle}>
+              <Bell size={15} color="#ffffff" strokeWidth={2} />
+              Lembrete
+            </button>
+            <button onClick={()=>{ onCreateNew("milestone"); onClose(); }} style={createBtnStyle}>
+              <Flag size={15} color="#ffffff" strokeWidth={2} />
+              Marco
+            </button>
+          </div>
+        </div>
+
+        {/* Items list */}
+        <div style={{ flex:1, overflowY:"auto", padding:"0 14px 24px" }}>
+          {!hasItems && (
+            <div style={{ textAlign:"center", padding:"32px 0", color:"rgba(255,255,255,0.35)", fontSize:"13px", fontFamily:"'Inter', sans-serif" }}>
+              Nenhum item neste dia
+            </div>
+          )}
+
+          {/* Notes */}
+          {notes.map(n => {
+            const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
+            const isPost = n.platform === "instagram";
+            return (
+              <div key={n.id} onClick={()=>{ onOpenNote(n); onClose(); }}
+                style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
+                onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.22)"}
+                onMouseLeave={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.13)"}>
+                <div style={{ width:"4px", height:"36px", borderRadius:"2px", backgroundColor: isPost ? "#e1306c" : n.size==="large" ? "#FF0032" : st.color, flexShrink:0 }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.title}</div>
+                  <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>
+                    {isPost ? "Post" : "Vídeo"}{n.pubTime ? ` · ${n.pubTime}` : ""}
+                  </div>
+                </div>
+                <span style={{ fontSize:"9px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: st.color, borderRadius:"4px", padding:"2px 6px", flexShrink:0 }}>{st.label}</span>
+              </div>
+            );
+          })}
+
+          {/* Milestones */}
+          {milestones.map(m => (
+            <div key={m.id} onClick={()=>{ onOpenMilestone(m); onClose(); }}
+              style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
+              onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.22)"}
+              onMouseLeave={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.13)"}>
+              <div style={{ width:"4px", height:"36px", borderRadius:"2px", backgroundColor:"#ca8a04", flexShrink:0 }} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.title}</div>
+                <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>Marco</div>
+              </div>
+              <MilestoneIcon category={m.category} size={16} color="rgba(255,255,255,0.5)" />
+            </div>
+          ))}
+
+          {/* Reminders */}
+          {[...reminders].sort((a,b)=>a.time.localeCompare(b.time)).map(r => (
+            <div key={r.id} onClick={()=>{ onOpenReminder(r); onClose(); }}
+              style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
+              onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.22)"}
+              onMouseLeave={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.13)"}>
+              <div style={{ width:"4px", height:"36px", borderRadius:"2px", backgroundColor:"#AB988A", flexShrink:0 }} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.title}</div>
+                <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>Lembrete · {r.time}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
   const overlayRef = useRef(null);
   const titleRef   = useRef(null);
-  const dateRef    = useRef(null);
-  const [title,    setTitle]   = useState(reminder.title || "");
-  const [notes,    setNotes]   = useState(reminder.notes || "");
-  const [date,     setDate]    = useState(reminder.date  || todayISO());
-  const [time,     setTime]    = useState(reminder.time  || "09:00");
-  const [allDay,   setAllDay]  = useState(reminder.allDay || false);
-  const [calOpen,  setCalOpen] = useState(false);
-  const [calPos,   setCalPos]  = useState({ top:0, left:0 });
-  const [saved,    setSaved]   = useState(false);
-
-  // Calendar nav state
-  const parsed = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(date+"T12:00:00") : new Date();
-  const [viewYear,  setViewYear]  = useState(parsed.getFullYear());
-  const [viewMonth, setViewMonth] = useState(parsed.getMonth());
+  const [title,  setTitle]  = useState(reminder.title || "");
+  const [notes,  setNotes]  = useState(reminder.notes || "");
+  const [date,   setDate]   = useState(reminder.date  || todayISO());
+  const [time,   setTime]   = useState(reminder.time  || "09:00");
+  const [allDay, setAllDay] = useState(reminder.allDay || false);
+  const [saved,  setSaved]  = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const dateAnchorRef = useRef(null);
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") { if (calOpen) setCalOpen(false); else onClose(); } };
+    const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, [onClose, calOpen]);
-  useEffect(() => {
-    if (!calOpen) return;
-    const h = e => { if (dateRef.current && !dateRef.current.contains(e.target)) setCalOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [calOpen]);
+  }, [onClose]);
 
   const handleSave = () => {
     if (!title.trim()) return;
     onSave({ ...reminder, title:title.trim(), notes, date, time, allDay });
     setSaved(true); setTimeout(() => { setSaved(false); onClose(); }, 800);
   };
-
-  const openCal = () => {
-    if (!dateRef.current) return;
-    const r = dateRef.current.getBoundingClientRect();
-    setCalPos({ top: r.bottom + 6, left: r.left });
-    setCalOpen(v => !v);
-  };
-
-  const selectDay = d => {
-    const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    setDate(iso); setCalOpen(false);
-  };
-
-  const prevMo = () => { if(viewMonth===0){setViewYear(y=>y-1);setViewMonth(11);}else setViewMonth(m=>m-1); };
-  const nextMo = () => { if(viewMonth===11){setViewYear(y=>y+1);setViewMonth(0);}else setViewMonth(m=>m+1); };
-
-  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay();
-  const prevDays    = new Date(viewYear, viewMonth, 0).getDate();
-  const cells = [];
-  for (let i = firstDow-1; i >= 0; i--) cells.push({ day: prevDays-i, cur:false });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day:d, cur:true });
-  while (cells.length % 7 !== 0) cells.push({ day: cells.length-firstDow-daysInMonth+1, cur:false });
-
-  const displayDate = (() => {
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Data";
-    const [y,m,d] = date.split("-");
-    return `${d}/${m}/${y}`;
-  })();
-
-  const pill = { display:"flex", alignItems:"center", gap:"7px", backgroundColor:"rgba(0,0,0,0.13)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"20px", padding:"7px 13px", fontFamily:"'DM Mono', monospace", fontSize:"12px", color:"rgba(255,255,255,0.85)", whiteSpace:"nowrap", flex:1 };
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -2827,69 +3170,42 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
-            <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"7px" }}>Notas ou URL</div>
             <input value={notes} onChange={e=>setNotes(e.target.value)}
-              placeholder="Adicionar nota ou link..."
+              placeholder="Notas ou URL..."
               className="green-input"
               style={{ fontSize:"13px", fontWeight:400, border:"none", outline:"none", color:"rgba(255,255,255,0.85)", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
-          <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
 
-            <button onClick={()=>setAllDay(v=>!v)}
-              style={{ ...pill, cursor:"pointer", backgroundColor: allDay ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.13)", borderColor: allDay ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.14)", color: allDay ? "#fff" : "rgba(255,255,255,0.55)", gap:"6px" }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Dia inteiro
-            </button>
-            {!allDay && (
-              <label style={{ ...pill, cursor:"default" }}>
-                <Clock size={11} color="rgba(255,255,255,0.45)" strokeWidth={2} style={{ flexShrink:0 }} />
-                <input type="time" value={time} onChange={e=>setTime(e.target.value)}
-                  className="green-time"
-                  style={{ fontSize:"12px", fontFamily:"'DM Mono', monospace", border:"none", outline:"none", color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", padding:0, width:"62px", caretColor:"#fff", cursor:"pointer" }} />
-              </label>
-            )}
-
-            <div ref={dateRef} style={{ position:"relative", flex:1 }}>
-              <button onClick={openCal}
-                style={{ ...pill, width:"100%", cursor:"pointer", justifyContent:"flex-start" }}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.35)"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.14)"}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                {displayDate}
-              </button>
-              {calOpen && (
-                <div style={{ position:"fixed", top:calPos.top, left:calPos.left, zIndex:9999, backgroundColor:"#1a2e1a", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"12px", padding:"12px", boxShadow:"0 16px 40px rgba(0,0,0,0.5)", width:"216px", animation:"fadeIn 0.12s ease", userSelect:"none" }}>
-
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
-                    <button onClick={prevMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>‹</button>
-                    <span style={{ fontSize:"11px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase" }}>{PT_MONTHS[viewMonth]} {viewYear}</span>
-                    <button onClick={nextMo} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.55)", cursor:"pointer", fontSize:"16px", padding:"0 6px", lineHeight:1 }}>›</button>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
-                    {PT_DAYS.map((d,i)=><div key={i} style={{ textAlign:"center", fontSize:"8px", fontWeight:700, color:"rgba(255,255,255,0.28)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase" }}>{d}</div>)}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
-                    {cells.map((cell,i)=>{
-                      const iso=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
-                      const isSel = cell.cur && iso===date;
-                      const isTod = cell.cur && iso===todayISO();
-                      return (
-                        <button key={i} onClick={()=>cell.cur&&selectDay(cell.day)}
-                          style={{ padding:"5px 0", borderRadius:"5px", border:"none", background: isSel?SAGE:isTod?"rgba(87,119,87,0.4)":"transparent", color: isSel?"#fff":isTod?"#a8d4a8":cell.cur?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.18)", fontSize:"11px", fontFamily:"'DM Mono', monospace", fontWeight:isSel||isTod?700:400, cursor:cell.cur?"pointer":"default" }}
-                          onMouseEnter={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background="rgba(255,255,255,0.1)"; }}
-                          onMouseLeave={e=>{ if(cell.cur&&!isSel) e.currentTarget.style.background=isTod?"rgba(87,119,87,0.4)":"transparent"; }}>
-                          {cell.day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+          {/* Properties */}
+          <div style={{ display:"flex", flexDirection:"column" }}>
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Data</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
+                <button ref={dateAnchorRef} onClick={()=>setDatePickerOpen(v=>!v)}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:600, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.85)", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {date ? (() => { const [y,m,d]=date.split("-"); return `${d}/${m}/${y}`; })() : "Sem data"}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
             </div>
-
+            <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
+              <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Horário</span>
+              <div style={{ flex:1, display:"flex", justifyContent:"flex-end", alignItems:"center", gap:"10px" }}>
+                <button onClick={()=>setAllDay(v=>!v)}
+                  style={{ background:"none", border:"none", cursor:"pointer", fontSize:"11px", fontFamily:"'Inter', sans-serif", color: allDay?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)", padding:0 }}>
+                  Dia inteiro
+                </button>
+                {!allDay && <TimeInput value={time} onChange={setTime} />}
+              </div>
+            </div>
           </div>
+
+          <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
+            <div style={{ padding:"12px 16px 16px" }}>
+              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+            </div>
+          </DropdownSheet>
+
         </div>
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
           <button onClick={()=>{ onDelete(reminder); onClose(); }}
@@ -2968,7 +3284,7 @@ function ReminderAddForm({ date, onAdd, onClose }) {
   );
 }
 
-function DayCell({ cellData, colIdx, isMobile, notes, milestones, reminders, today, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
+function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones, reminders, today, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
   const STATUS_MAP = useStatusMap();
   const T = useTheme();
   const { date, day, isCurrentMonth } = cellData;
@@ -2995,7 +3311,7 @@ function DayCell({ cellData, colIdx, isMobile, notes, milestones, reminders, tod
     <div onClick={()=>onOpen(date)} onContextMenu={handleDayCtx} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onDragEnd={handleDragEnd}
       onMouseEnter={e=>{ setIsHovered(true); if(isDragOver) return; e.currentTarget.style.filter=isCurrentMonth?"brightness(1.08)":"brightness(0.92)"; }}
       onMouseLeave={e=>{ setIsHovered(false); if(isDragOver) return; e.currentTarget.style.filter=""; }}
-      style={{ border:isDragOver?`2px solid ${BROLL_COLOR}`:isToday?`1px solid ${T.todayBorder}`:"none", borderRadius:"10px", padding: isMobile ? "5px 4px" : "8px", minHeight: isMobile ? "52px" : "80px", backgroundColor:isDragOver?"#f0fdf4":isCurrentMonth?(isWeekend?"#6b8f6b":"#8BAB8A"):"#4a6b4a", cursor:"pointer", display:"flex", flexDirection:"column", transition:"filter 0.12s, border-color 0.12s", position:"relative", boxShadow:isDragOver?`0 0 0 3px ${BROLL_COLOR}33`:"none" }}>
+      style={{ border:isDragOver?`2px solid ${BROLL_COLOR}`:isToday?`1px solid ${T.todayBorder}`:"none", borderRadius: isMobile ? "0" : "10px", padding: mobileGridView ? "4px 3px" : isMobile ? "5px 4px" : "8px", minHeight: mobileGridView ? "64px" : isMobile ? undefined : "80px", height: (isMobile && !mobileGridView) ? "100%" : undefined, backgroundColor:isDragOver?"#f0fdf4":isCurrentMonth?(isWeekend?"#6b8f6b":"#8BAB8A"):"#4a6b4a", cursor:"pointer", display:"flex", flexDirection:"column", transition:"filter 0.12s, border-color 0.12s", position:"relative", boxShadow:isDragOver?`0 0 0 3px ${BROLL_COLOR}33`:"none" }}>
 
       <div style={{ position:"absolute", top:"6px", right:"6px", pointerEvents:"none", opacity: isHovered && !isDragOver ? 0.85 : 0, transform: isHovered && !isDragOver ? "scale(1)" : "scale(0.6)", transition:"opacity 0.18s ease, transform 0.18s ease" }}>
         <div style={{ width:"18px", height:"18px", borderRadius:"50%", backgroundColor:isCurrentMonth?"#4A6B4A":"#8CAB8A", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.18)" }}>
@@ -3005,14 +3321,45 @@ function DayCell({ cellData, colIdx, isMobile, notes, milestones, reminders, tod
 
       <div style={{ fontSize:"12px", fontWeight:isToday?700:500, color:isToday?T.todayText:T.text, backgroundColor:isToday?T.todayCircle:"transparent", borderRadius:"50%", width:"22px", height:"22px", display:"flex", alignItems:"center", justifyContent:"center", marginBottom: isMobile ? "2px" : "5px", flexShrink:0, fontFamily:"'DM Mono', monospace" }}>{day}</div>
       {isMobile ? (
-        <div style={{ display:"flex", flexWrap:"wrap", gap:"2px", marginTop:"1px" }}>
-          {sortedNotes.map(n => {
-            const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
-            return <div key={n.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor: n.platform==="instagram" ? "#e1306c" : n.size==="large" ? "#FF0032" : st.color, flexShrink:0 }} />;
-          })}
-          {milestones.map(m => <div key={m.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor:"#ca8a04", flexShrink:0 }} />)}
-          {reminders.map(r => <div key={r.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor:"#AB988A", flexShrink:0 }} />)}
-        </div>
+        mobileGridView ? (
+          /* Grid mode: pills like the list view */
+          <div style={{ display:"flex", flexDirection:"column", gap:"2px", marginTop:"2px", overflow:"hidden" }}>
+            {sortedNotes.slice(0,2).map(n => {
+              const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
+              const isPost = n.platform === "instagram";
+              const accent = isPost ? "#e1306c" : n.size === "large" ? "#FF0032" : st.color;
+              return (
+                <div key={n.id} style={{ display:"flex", alignItems:"center", gap:"3px", backgroundColor:"rgba(0,0,0,0.2)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden" }}>
+                  <div style={{ width:"2px", minHeight:"8px", borderRadius:"1px", backgroundColor:accent, flexShrink:0 }} />
+                  <span style={{ fontSize:"9px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, lineHeight:1.3 }}>{n.title || "—"}</span>
+                </div>
+              );
+            })}
+            {milestones.slice(0,1).map(m => (
+              <div key={m.id} style={{ display:"flex", alignItems:"center", backgroundColor:"#5F805E", borderRadius:"3px", padding:"2px 4px", overflow:"hidden" }}>
+                <span style={{ fontSize:"9px", fontWeight:600, color:"#ffffff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, lineHeight:1.3 }}>{m.title}</span>
+              </div>
+            ))}
+            {reminders.slice(0,1).map(r => (
+              <div key={r.id} style={{ display:"flex", alignItems:"center", backgroundColor:"#ffffff", borderRadius:"3px", padding:"2px 4px", overflow:"hidden" }}>
+                <span style={{ fontSize:"9px", fontWeight:500, color:"#83B383", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, lineHeight:1.3 }}>{r.title}</span>
+              </div>
+            ))}
+            {(sortedNotes.length + milestones.length + reminders.length) > 3 && (
+              <div style={{ fontSize:"8px", color:"rgba(255,255,255,0.4)", fontFamily:"'DM Mono', monospace", paddingLeft:"4px", lineHeight:1.3 }}>+{sortedNotes.length + milestones.length + reminders.length - 3}</div>
+            )}
+          </div>
+        ) : (
+          /* List mode dots (legacy, not used in list view but kept as fallback) */
+          <div style={{ display:"flex", flexWrap:"wrap", gap:"2px", marginTop:"1px" }}>
+            {sortedNotes.map(n => {
+              const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
+              return <div key={n.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor: n.platform==="instagram" ? "#e1306c" : n.size==="large" ? "#FF0032" : st.color, flexShrink:0 }} />;
+            })}
+            {milestones.map(m => <div key={m.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor:"#ca8a04", flexShrink:0 }} />)}
+            {reminders.map(r => <div key={r.id} style={{ width:"6px", height:"6px", borderRadius:"50%", backgroundColor:"#AB988A", flexShrink:0 }} />)}
+          </div>
+        )
       ) : (
         <>
           <div style={{ display:"flex", flexDirection:"column" }}>{sortedNotes.map(n => <NoteChip key={n.id} note={n} onDragStart={onDragStart} isCurrentMonth={isCurrentMonth} onQuickDelete={onQuickDeleteNote} onQuickEditStatus={onQuickEditStatus} onQuickEditTitle={onQuickEditTitle} onContextMenu={handleNoteCtx} onOpen={onOpenNote} selected={selectedIds&&selectedIds.has(n.id)} />)}</div>
@@ -3084,6 +3431,356 @@ const IDEA_CATEGORIES = {
 };
 
 
+// ─── MOBILE CALENDAR LIST ─────────────────────────────────────────────────────
+
+const PT_MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const PT_WEEKDAYS_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+function buildMonthDays(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const d = i + 1;
+    return { date: toISODate(year, month, d), day: d, dow: new Date(year, month, d).getDay() };
+  });
+}
+
+function MobileYearPicker({ currentYear, currentMonth, onSelect, onClose }) {
+  const isMobile = useIsMobile();
+  const [selYear, setSelYear] = useState(currentYear);
+  const yearScrollRef = useRef(null);
+  const years = Array.from({ length: 9 }, (_, i) => currentYear - 4 + i);
+
+  useEffect(() => {
+    const el = yearScrollRef.current;
+    if (!el) return;
+    const btn = el.querySelector(`[data-year="${selYear}"]`);
+    if (btn) btn.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+  }, [selYear]);
+
+  function MiniCal({ year, month }) {
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayStr = todayISO();
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length % 7 !== 0) cells.push(null);
+    return (
+      <div style={{ width:"100%" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"2px" }}>
+          {["D","S","T","Q","Q","S","S"].map((d,i) => (
+            <div key={i} style={{ textAlign:"center", fontSize:"7px", color:"rgba(255,255,255,0.25)", fontFamily:"'DM Mono', monospace", fontWeight:700 }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"1px" }}>
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} />;
+            const iso = toISODate(year, month, d);
+            const isT = iso === todayStr;
+            return (
+              <div key={i} style={{ textAlign:"center", fontSize:"7px", fontFamily:"'DM Mono', monospace", color: isT ? "#fff" : "rgba(255,255,255,0.45)", fontWeight: isT ? 700 : 400, backgroundColor: isT ? "rgba(255,255,255,0.25)" : "transparent", borderRadius:"2px", lineHeight:"13px" }}>{d}</div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const monthRows = [[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
+
+  const inner = (
+    <>
+      {/* Year row */}
+      <div ref={yearScrollRef} style={{ display:"flex", gap:"6px", padding:"4px 20px 14px", overflowX:"auto", flexShrink:0, scrollbarWidth:"none" }}>
+        {years.map(y => (
+          <button key={y} data-year={y} onClick={()=>setSelYear(y)}
+            style={{ flexShrink:0, padding:"6px 18px", borderRadius:"20px", border:`1px solid ${selYear===y?"rgba(255,255,255,0.65)":"rgba(255,255,255,0.15)"}`, background: selYear===y?"rgba(255,255,255,0.2)":"transparent", color: selYear===y?"#fff":"rgba(255,255,255,0.45)", fontSize:"14px", fontWeight: selYear===y?700:400, cursor:"pointer", fontFamily:"'DM Mono', monospace", transition:"all 0.15s" }}>
+            {y}
+          </button>
+        ))}
+      </div>
+      {/* Month grid */}
+      <div style={{ overflowY:"auto", padding:"0 12px 8px" }}>
+        {monthRows.map((row, ri) => (
+          <div key={ri} style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"8px", marginBottom:"8px" }}>
+            {row.map(mi => {
+              const isCurrent = selYear === currentYear && mi === currentMonth;
+              return (
+                <button key={mi} onClick={()=>onSelect(selYear, mi)}
+                  style={{ padding:"10px 6px 8px", borderRadius:"12px", border:`1px solid ${isCurrent?"rgba(255,255,255,0.45)":"rgba(255,255,255,0.1)"}`, background: isCurrent?"rgba(255,255,255,0.14)":"rgba(255,255,255,0.04)", cursor:"pointer", display:"flex", flexDirection:"column", gap:"6px", alignItems:"center" }}>
+                  <span style={{ fontSize:"11px", fontWeight: isCurrent?700:500, color: isCurrent?"#fff":"rgba(255,255,255,0.6)", fontFamily:"'Inter', sans-serif" }}>{PT_MONTHS_FULL[mi].slice(0,3)}</span>
+                  <MiniCal year={selYear} month={mi} />
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)", display:"flex", alignItems:"flex-end", justifyContent:"center", animation:"fadeIn 0.15s ease" }}>
+        <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:"#3a5a3a", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"85vh", display:"flex", flexDirection:"column", paddingBottom:"env(safe-area-inset-bottom, 20px)", boxShadow:"0 -8px 40px rgba(0,0,0,0.5)", animation:"slideUp 0.2s ease" }}>
+          <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px", flexShrink:0 }}>
+            <div style={{ width:"36px", height:"4px", borderRadius:"2px", backgroundColor:"rgba(255,255,255,0.25)" }} />
+          </div>
+          <div style={{ padding:"4px 20px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+            <span style={{ fontSize:"12px", fontWeight:700, color:"rgba(255,255,255,0.4)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Ir para</span>
+            <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.35)", fontSize:"20px", cursor:"pointer", lineHeight:1, padding:"4px" }}>×</button>
+          </div>
+          {inner}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop — centered modal, no close button
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:SAGE, borderRadius:"16px", width:"100%", maxWidth:"420px", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 30px 70px rgba(0,0,0,0.4)", overflow:"hidden", animation:"slideUp 0.2s ease", fontFamily:"'Inter', sans-serif", paddingTop:"12px" }}>
+        {inner}
+      </div>
+    </div>
+  );
+}
+
+function MobileCalendarList({ year, month, today, notes, milestones, reminders, onDayOpen, statusMap, onNavigate, scrollToTodayRef }) {
+  const scrollRef   = useRef(null);
+  const todayRef    = useRef(null);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const days = buildMonthDays(year, month);
+
+  // Expose scroll-to-today to parent
+  useEffect(() => {
+    if (scrollToTodayRef) {
+      scrollToTodayRef.current = () => {
+        todayRef.current?.scrollIntoView({ behavior:"smooth", block:"start" });
+      };
+    }
+  }, [scrollToTodayRef]);
+
+  // Prev/next month labels for sentinels
+  const prevM = month === 0  ? 11 : month - 1;
+  const nextM = month === 11 ? 0  : month + 1;
+  const prevY = month === 0  ? year - 1 : year;
+  const nextY = month === 11 ? year + 1 : year;
+
+  // Scroll to today on mount / month change
+  useEffect(() => {
+    if (todayRef.current && scrollRef.current) {
+      todayRef.current.scrollIntoView({ behavior:"auto", block:"start" });
+    }
+  }, [year, month]);
+
+  const sentinelBtn = {
+    display:"flex", alignItems:"center", justifyContent:"center", gap:"6px",
+    width:"100%", padding:"14px 0",
+    background:"none", border:"none", cursor:"pointer",
+    color:"rgba(255,255,255,0.4)", fontSize:"12px", fontWeight:600,
+    fontFamily:"'Inter', sans-serif", letterSpacing:"0.02em",
+  };
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, position:"relative" }}>
+      <div ref={scrollRef} style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch" }}>
+
+        {/* Top sentinel — shows previous month */}
+        <button style={sentinelBtn} onClick={()=>setShowPicker(true)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+          {PT_MONTHS_FULL[prevM]}{prevY !== year ? ` ${prevY}` : ""}
+        </button>
+
+        {/* Day rows */}
+        {days.map(({ date, day, dow }) => {
+          const dayNotes     = (notes[date]     || []).slice().sort((a,b)=>a.size===b.size?0:a.size==="large"?-1:1);
+          const dayMiles     = milestones[date] || [];
+          const dayReminders = (reminders[date] || []).slice().sort((a,b)=>a.time.localeCompare(b.time));
+          const isToday      = date === today;
+          const isWeekend    = dow === 0 || dow === 6;
+          const hasItems     = dayNotes.length > 0 || dayMiles.length > 0 || dayReminders.length > 0;
+
+          return (
+            <div key={date} ref={isToday ? todayRef : null}
+              onClick={() => onDayOpen(date)}
+              style={{ display:"flex", alignItems:"flex-start", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"10px 0", cursor:"pointer", minHeight:"44px", backgroundColor: isToday ? "#819981" : "transparent", transition:"background 0.1s" }}
+              onMouseEnter={e=>{ if(!isToday) e.currentTarget.style.backgroundColor="rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e=>{ if(!isToday) e.currentTarget.style.backgroundColor="transparent"; }}>
+
+              {/* Day column */}
+              <div style={{ width:"54px", flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", paddingTop:"2px" }}>
+                <div style={{ fontSize:"9px", fontWeight:700, color: isToday ? "rgba(255,255,255,0.75)" : isWeekend ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"3px" }}>
+                  {PT_WEEKDAYS_SHORT[dow]}
+                </div>
+                <div style={{ width:"30px", height:"30px", borderRadius:"50%", backgroundColor: isToday ? "#ffffff" : "transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <span style={{ fontSize:"16px", fontWeight: isToday ? 700 : 400, color: isToday ? "#4A6B4A" : isWeekend ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.8)", fontFamily:"'DM Mono', monospace" }}>{day}</span>
+                </div>
+              </div>
+
+              {/* Items column */}
+              <div style={{ flex:1, paddingRight:"12px", display:"flex", flexDirection:"column", gap:"4px", paddingTop:"4px", minHeight:"30px" }}>
+                {!hasItems && <div style={{ height:"30px" }} />}
+                {dayNotes.map(n => {
+                  const st = statusMap[n.status] || statusMap.ideia;
+                  const isPost = n.platform === "instagram";
+                  const accent = isPost ? "#e1306c" : n.size === "large" ? "#FF0032" : st.color;
+                  return (
+                    <div key={n.id} style={{ display:"flex", alignItems:"center", gap:"8px", backgroundColor:"rgba(0,0,0,0.18)", borderRadius:"6px", padding:"5px 8px" }}>
+                      <div style={{ width:"3px", minHeight:"14px", borderRadius:"2px", backgroundColor:accent, flexShrink:0 }} />
+                      <span style={{ fontSize:"12px", fontWeight:600, color:"rgba(255,255,255,0.9)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{n.title || "Sem título"}</span>
+                      <span style={{ fontSize:"8px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", backgroundColor:accent+"cc", borderRadius:"3px", padding:"1px 5px", flexShrink:0 }}>{isPost?"Post":st.label}</span>
+                    </div>
+                  );
+                })}
+                {dayMiles.map(m => (
+                  <div key={m.id} style={{ display:"flex", alignItems:"center", gap:"8px", backgroundColor:"#5F805E", borderRadius:"6px", padding:"5px 8px" }}>
+                    <span style={{ fontSize:"12px", fontWeight:600, color:"#ffffff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{m.title}</span>
+                  </div>
+                ))}
+                {dayReminders.map(r => (
+                  <div key={r.id} style={{ display:"flex", alignItems:"center", gap:"8px", backgroundColor:"#ffffff", borderRadius:"6px", padding:"5px 8px" }}>
+                    <span style={{ fontSize:"12px", fontWeight:500, color:"#83B383", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{r.title}</span>
+                    <span style={{ fontSize:"8px", color:"#83B383", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.7 }}>{r.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Bottom sentinel — shows next month */}
+        <button style={sentinelBtn} onClick={()=>setShowPicker(true)}>
+          {PT_MONTHS_FULL[nextM]}{nextY !== year ? ` ${nextY}` : ""}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
+      </div>
+
+      {showPicker && (
+        <MobileYearPicker
+          currentYear={year} currentMonth={month}
+          onSelect={(y, m) => { onNavigate(y, m); setShowPicker(false); }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── MOBILE GRID VIEW ─────────────────────────────────────────────────────────
+
+function MobileGridView({ year, month, today, notes, milestones, reminders, onDayOpen, onNavigate, onOpenNote, onOpenMilestone, onOpenReminder, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
+  const STATUS_MAP = useStatusMap();
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const containerRef = useRef(null);
+
+  // Build grid for current month only (no overflow rows)
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevM = month === 0 ? 11 : month - 1;
+  const prevY = month === 0 ? year - 1 : year;
+  const prevDays = new Date(prevY, prevM + 1, 0).getDate();
+  const nextM = month === 11 ? 0 : month + 1;
+  const nextY = month === 11 ? year + 1 : year;
+
+  const cells = [];
+  for (let i = firstDow - 1; i >= 0; i--) {
+    const d = prevDays - i;
+    cells.push({ date: toISODate(prevY, prevM, d), day: d, isCurrentMonth: false });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ date: toISODate(year, month, d), day: d, isCurrentMonth: true });
+  }
+  while (cells.length % 7 !== 0) {
+    const d = cells.length - firstDow - daysInMonth + 1;
+    cells.push({ date: toISODate(nextY, nextM, d), day: d, isCurrentMonth: false });
+  }
+
+  const numRows = cells.length / 7;
+
+  const handleTouchStart = e => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = e => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    if (Math.abs(dx) > 50 && dy < 60) {
+      if (dx < 0) onNavigate(nextM === 0 ? nextY : year, nextM);
+      else        onNavigate(prevM === 11 ? prevY : year, prevM);
+    }
+    touchStartX.current = null;
+  };
+
+  return (
+    <div ref={containerRef} style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, padding:"4px 2px 4px", userSelect:"none" }}
+      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+
+      {/* Weekday headers */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"3px", flexShrink:0 }}>
+        {["D","S","T","Q","Q","S","S"].map((d,i) => (
+          <div key={i} style={{ textAlign:"center", fontSize:"10px", fontWeight:700, color:"rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", padding:"2px 0" }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid — fills remaining height */}
+      <div style={{ flex:1, display:"grid", gridTemplateColumns:"repeat(7,1fr)", gridTemplateRows:`repeat(${numRows},1fr)`, gap:"3px", minHeight:0 }}>
+        {cells.map((cell, idx) => {
+          const isToday = cell.date === today;
+          const isCurrentMonth = cell.isCurrentMonth;
+          const dayNotes     = (notes[cell.date]     || []).slice().sort((a,b)=>a.size===b.size?0:a.size==="large"?-1:1);
+          const dayMiles     = milestones[cell.date] || [];
+          const dayReminders = reminders[cell.date]  || [];
+          const colIdx = idx % 7;
+          const isWeekend = colIdx === 0 || colIdx === 6;
+
+          return (
+            <div key={idx} onClick={() => onDayOpen(cell.date)}
+              style={{ backgroundColor: isCurrentMonth ? (isWeekend ? "#6b8f6b" : "#8BAB8A") : "#3d5c3d", borderRadius:"4px", display:"flex", flexDirection:"column", padding:"4px 3px", cursor:"pointer", overflow:"hidden", border: isToday ? "1.5px solid rgba(255,255,255,0.7)" : "none", minHeight:0 }}
+              onTouchStart={e=>e.stopPropagation()}
+              onTouchEnd={e=>{ e.stopPropagation(); onDayOpen(cell.date); }}>
+
+              {/* Day number */}
+              <div style={{ fontSize:"11px", fontWeight: isToday ? 700 : 400, color: isCurrentMonth ? (isToday ? "#fff" : "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", marginBottom:"3px", flexShrink:0, lineHeight:1 }}>{cell.day}</div>
+
+              {/* Pills */}
+              <div style={{ flex:1, display:"flex", flexDirection:"column", gap:"2px", overflow:"hidden", minHeight:0 }}>
+                {dayNotes.slice(0,2).map(n => {
+                  const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
+                  const isPost = n.platform === "instagram";
+                  const accent = isPost ? "#e1306c" : n.size === "large" ? "#FF0032" : st.color;
+                  return (
+                    <div key={n.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? accent+"99" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
+                      <span style={{ fontSize:"8px", fontWeight:600, color: isCurrentMonth ? "#fff" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{n.title || "—"}</span>
+                    </div>
+                  );
+                })}
+                {dayMiles.slice(0,1).map(m => (
+                  <div key={m.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? "#5F805E" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
+                    <span style={{ fontSize:"8px", fontWeight:600, color: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{m.title}</span>
+                  </div>
+                ))}
+                {dayReminders.slice(0,1).map(r => (
+                  <div key={r.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
+                    <span style={{ fontSize:"8px", fontWeight:500, color: isCurrentMonth ? "#83B383" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{r.title}</span>
+                  </div>
+                ))}
+                {(dayNotes.length + dayMiles.length + dayReminders.length) > 3 && isCurrentMonth && (
+                  <div style={{ fontSize:"8px", color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", paddingLeft:"3px", lineHeight:1.2, flexShrink:0 }}>+{dayNotes.length + dayMiles.length + dayReminders.length - 3}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -3116,9 +3813,18 @@ export default function CalendarNotes() {
   const dragRef = useRef(null);
   const grid    = buildCalendarGrid(year, month);
 
+  const [mobileDayModal, setMobileDayModal] = useState(null); // { date }
+  const [mobileView, setMobileView] = useState("list"); // "list" | "grid"
+  const [showNavPicker, setShowNavPicker] = useState(false);
   const prevMonth = () => { if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); };
   const nextMonth = () => { if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); };
-  const goToday   = () => { const d=new Date(); setYear(d.getFullYear()); setMonth(d.getMonth()); };
+  const scrollToTodayFn = useRef(null);
+  const goToday = () => {
+    const d = new Date();
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+    setTimeout(() => scrollToTodayFn.current?.(), 80);
+  };
 
   const handleUpdateSettings  = useCallback(settings => dispatch({ type:"UPDATE_SETTINGS", settings }), []);
   const handleUpdateStatuses  = useCallback(statuses => dispatch({ type:"UPDATE_STATUSES", statuses }), []);
@@ -3242,7 +3948,7 @@ export default function CalendarNotes() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: ${T.appBg}; min-height: 100vh; transition: background 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
         @media (max-width: 767px) {
-          input, textarea, select { font-size: 16px !important; }
+          .mobile-title-input { font-size: 16px !important; }
         }
         @keyframes fadeIn       { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp      { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
@@ -3284,40 +3990,110 @@ export default function CalendarNotes() {
         textarea { font-family: 'Inter', sans-serif; }
         .green-input::placeholder { color: rgba(255,255,255,0.35); }
         input[type="time"].green-time::-webkit-calendar-picker-indicator { display: none; }
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
       `}</style>
 
-      <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "16px 10px" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"auto", height:"100vh", boxSizing:"border-box" }}>
+      <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100vh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
 
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: isMobile ? "14px" : "28px" }}>
-          <div style={{ display:"flex", gap: isMobile ? "5px" : "8px", alignItems:"center" }}>
-            <button onClick={()=>setShowMenu(true)} style={{ ...navBtn, width:"36px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"4px" }}>
-              <span style={{ display:"block", width:"14px", height:"1.5px", backgroundColor:T.textMuted, borderRadius:"2px" }} />
-              <span style={{ display:"block", width:"14px", height:"1.5px", backgroundColor:T.textMuted, borderRadius:"2px" }} />
-              <span style={{ display:"block", width:"14px", height:"1.5px", backgroundColor:T.textMuted, borderRadius:"2px" }} />
+        {isMobile ? (
+          /* ── Mobile topbar — identical to editor ── */
+          <div style={{ position:"sticky", top:0, zIndex:100, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)", backgroundColor:"rgba(73,103,73,0.92)", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+            <button onClick={()=>setShowMenu(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
             </button>
-            <button onClick={goToday} style={{ ...navBtn, padding:"0 16px" }}>Hoje</button>
-            <button onClick={prevMonth} style={{ ...navBtn, width:"36px", fontSize:"18px" }}>‹</button>
-            <button onClick={nextMonth} style={{ ...navBtn, width:"36px", fontSize:"18px" }}>›</button>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
-            {savedIndicator && !isMobile && <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.55)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", animation:"fadeIn 0.2s" }}>✓ salvo</span>}
-            <div style={{ textAlign:"right" }}>
-              {!isMobile && <div style={{ fontSize:"11px", fontFamily:"'DM Mono', monospace", color:T.textFaint, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"4px" }}>Calendário</div>}
-              <div style={{ fontSize: isMobile ? "20px" : "28px", fontWeight:700, color:"#ffffff", letterSpacing:"-0.01em", fontFamily:"'Inter', sans-serif" }}>{getMonthLabel(year, month)}</div>
+            <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:"8px" }}>
+              <span style={{ fontSize:"15px", fontWeight:700, color:"#fff", fontFamily:"'Inter', sans-serif", letterSpacing:"-0.01em" }}>
+                {(() => { const d=new Date(); return `${d.getDate()} de ${PT_MONTHS_FULL[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; })()}
+              </span>
+            </button>
+            <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+              {/* View toggle */}
+              <button onClick={()=>setMobileView(v => v==="list" ? "grid" : "list")}
+                style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"8px", cursor:"pointer", padding:"5px 8px", color:"rgba(255,255,255,0.7)", display:"flex", alignItems:"center" }}>
+                {mobileView === "list" ? (
+                  /* Grid icon */
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                ) : (
+                  /* List icon */
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
-        </div>
-        <div ref={gridRef} style={{ position:"relative", userSelect: lassoStart.current ? "none" : "auto" }}
+        ) : (
+          /* ── Desktop header ── */
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"28px" }}>
+            <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
+              <button onClick={()=>setShowMenu(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+              </button>
+              <button onClick={prevMonth} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button onClick={nextMonth} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              {savedIndicator && <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.55)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", animation:"fadeIn 0.2s", marginLeft:"4px" }}>✓ salvo</span>}
+            </div>
+            <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, textAlign:"right" }}>
+              <div style={{ fontSize:"28px", fontWeight:700, color:"#ffffff", letterSpacing:"-0.01em", fontFamily:"'Inter', sans-serif" }}>
+                {(() => { const d=new Date(); return `${d.getDate()} de ${PT_MONTHS_FULL[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; })()}
+              </div>
+            </button>
+          </div>
+        )}
+        {isMobile ? (
+          mobileView === "list" ? (
+            <MobileCalendarList
+              year={year} month={month} today={today}
+              notes={state.notes} milestones={state.milestones} reminders={state.reminders}
+              statusMap={statusMap}
+              onDayOpen={date => setMobileDayModal({ date })}
+              onNavigate={(y, m) => { setYear(y); setMonth(m); }}
+              scrollToTodayRef={scrollToTodayFn}
+            />
+          ) : (
+            /* Mobile grid view — full height, swipeable, current month only */
+            <MobileGridView
+              year={year} month={month} today={today}
+              notes={state.notes} milestones={state.milestones} reminders={state.reminders}
+              onDayOpen={date => setMobileDayModal({date})}
+              onOpenWithAction={handleOpenWithAction}
+              onOpenNote={note => { if(note.platform==="instagram") setOpenEditor({type:"post",item:note}); else setOpenEditor({type:"note-full",item:note}); }}
+              onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})}
+              onOpenReminder={r=>setOpenReminder(r)}
+              onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)}
+              onQuickEditStatus={handleQuickEditStatus}
+              onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}}
+              onQuickDeleteMilestone={handleQuickDeleteMilestone}
+              onAddReminder={handleAddReminder}
+              onDeleteReminder={handleDeleteReminder}
+              selectedIds={selectedIds}
+              onNavigate={(y,m)=>{setYear(y);setMonth(m);}}
+            />
+          )
+        ) : (
+        <div ref={gridRef} style={{ position:"relative", userSelect: lassoStart.current ? "none" : "auto", flex:1, display:"flex", flexDirection:"column", minHeight:0 }}
           onMouseDown={handleGridMouseDown}
           onMouseMove={handleGridMouseMove}
           onMouseUp={handleGridMouseUp}
           onMouseLeave={handleGridMouseUp}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7, minmax(0,1fr))", gap: isMobile ? "4px" : "12px" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(7, minmax(0,1fr))", gap:"12px", flex:1, minHeight:0, gridTemplateRows:`auto repeat(${grid.length / 7}, auto)` }}>
           {WEEKDAYS.map(d => (
-            <div key={d} style={{ textAlign:"center", fontSize:"11px", fontWeight:700, color:T.textFaint, fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", padding:"4px 0" }}>{isMobile ? d[0] : d}</div>
+            <div key={d} style={{ textAlign:"center", fontSize:"11px", fontWeight:700, color:T.textFaint, fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", padding:"4px 0" }}>{d}</div>
           ))}
           {grid.map((cell, idx) => (
-            <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={isMobile} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today} onOpen={date=>setQuickCreate({date,type:"note"})} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
+            <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today}
+              onOpen={date => setQuickCreate({date,type:"note"})} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
                     if (note.platform === "instagram") {
                       setOpenEditor({ type:"post", item:note });
                     } else {
@@ -3351,9 +4127,33 @@ export default function CalendarNotes() {
             </div>
           )}
         </div>
+        )} {/* end desktop-only grid */}
 
 
       </div>
+
+      {showNavPicker && (
+        <MobileYearPicker
+          currentYear={year} currentMonth={month}
+          onSelect={(y, m) => { setYear(y); setMonth(m); setShowNavPicker(false); setTimeout(() => scrollToTodayFn.current?.(), 80); }}
+          onClose={() => setShowNavPicker(false)}
+        />
+      )}
+
+      {mobileDayModal && (
+        <MobileDayModal
+          date={mobileDayModal.date}
+          notes={state.notes[mobileDayModal.date]||[]}
+          milestones={state.milestones[mobileDayModal.date]||[]}
+          reminders={state.reminders[mobileDayModal.date]||[]}
+          today={today}
+          onClose={()=>setMobileDayModal(null)}
+          onOpenNote={note=>{ setMobileDayModal(null); if(note.platform==="instagram") setOpenEditor({type:"post",item:note}); else setOpenEditor({type:"note-full",item:note}); }}
+          onOpenMilestone={m=>{ setMobileDayModal(null); setOpenEditor({type:"milestone",item:m}); }}
+          onOpenReminder={r=>{ setMobileDayModal(null); setOpenReminder(r); }}
+          onCreateNew={type=>{ setMobileDayModal(null); setQuickCreate({date:mobileDayModal.date,type: type==="post" ? "note" : type}); if(type==="post") setTimeout(()=>setQuickCreate({date:mobileDayModal.date,type:"note",platform:"instagram"}),0); }}
+        />
+      )}
       {quickCreate && (
         <QuickCreateModal
           initialDate={quickCreate.date}
@@ -3475,7 +4275,7 @@ export default function CalendarNotes() {
 
               {[
                 { label:"Exportar dados", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-                  onClick: ()=>{ setShowMenu(false); const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`calendario-${new Date().toISOString().slice(0,10)}.json`; a.click(); } },
+                  onClick: ()=>{ setShowMenu(false); const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`calendario-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } },
                 { label:"Lixeira", icon: <Trash2 size={14} strokeWidth={2} />,
                   onClick: ()=>{ setShowMenu(false); setShowTrash(true); } },
               ].map(({label, icon, onClick}) => (
@@ -3511,4 +4311,3 @@ export default function CalendarNotes() {
     </StatusMapContext.Provider>
   );
 }
-
