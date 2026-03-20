@@ -3838,10 +3838,23 @@ export default function CalendarNotes() {
   // On mount: load from persistent storage and hydrate if found
   useEffect(() => {
     dispatch({type:"PURGE_TRASH"});
-    loadStateFromStorage().then(persisted => {
-      if (persisted) dispatch({type:"HYDRATE", state: persisted});
+    // Supabase is the source of truth — always load from there first
+    supaLoad().then(persisted => {
+      if (persisted) {
+        dispatch({type:"HYDRATE", state: persisted});
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)); } catch(e) {}
+      } else {
+        // Fallback to localStorage if Supabase is unreachable
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.notes && parsed?.milestones) dispatch({type:"HYDRATE", state: { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) }});
+          }
+        } catch(e) {}
+      }
     });
-    // Re-sync when user returns to the tab (e.g. switching devices)
+    // Re-sync when user returns to the tab
     const onFocus = () => {
       supaLoad().then(persisted => {
         if (persisted) dispatch({type:"HYDRATE", state: persisted});
@@ -4347,7 +4360,7 @@ export default function CalendarNotes() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </span>
                 Importar dados
-                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){dispatch({type:"HYDRATE",state:parsed}); setShowMenu(false);}else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses)}; dispatch({type:"HYDRATE",state:newState}); supaSave(newState); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
               </label>
 
               <div style={{ flex:1 }} />
