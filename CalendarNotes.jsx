@@ -3854,8 +3854,9 @@ export default function CalendarNotes() {
         } catch(e) {}
       }
     });
-    // Re-sync when user returns to the tab
+    // Re-sync when user returns to the tab — but not right after an import
     const onFocus = () => {
+      if (importLock.current) return;
       supaLoad().then(persisted => {
         if (persisted) dispatch({type:"HYDRATE", state: persisted});
       });
@@ -3863,6 +3864,8 @@ export default function CalendarNotes() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
+
+  const importLock = useRef(false);
 
   // Debounced save — waits 1.5s after last change before syncing to Supabase
   const saveTimer = useRef(null);
@@ -4360,7 +4363,7 @@ export default function CalendarNotes() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </span>
                 Importar dados
-                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses)}; dispatch({type:"HYDRATE",state:newState}); supaSave(newState); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses)}; importLock.current=true; dispatch({type:"HYDRATE",state:newState}); supaSave(newState).then(()=>{ setSavedIndicator(true); setTimeout(()=>{ importLock.current=false; }, 5000); }); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
               </label>
 
               <div style={{ flex:1 }} />
