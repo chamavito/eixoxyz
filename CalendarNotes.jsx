@@ -383,6 +383,40 @@ function appReducer(state, action) {
 
 const STORAGE_KEY = "calendarNotesState_v1";
 
+// ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
+const SUPA_URL  = "https://nmnilywctfwilgnwlbjd.supabase.co";
+const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbmlseXdjdGZ3aWxnbndsYmpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjc1NzYsImV4cCI6MjA4OTYwMzU3Nn0.nvfvIm67kC4zs8P8VcMVMY3yfYNOLUlW-5HCXf3-SV4";
+const SUPA_ROW  = "default"; // single-row key for the whole state
+
+async function supaLoad() {
+  try {
+    const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state?id=eq.${SUPA_ROW}&select=data`, {
+      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+    });
+    const rows = await res.json();
+    if (rows && rows[0]?.data) {
+      const parsed = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+      if (parsed?.notes && parsed?.milestones) return { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) };
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function supaSave(state) {
+  try {
+    await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
+      method: "POST",
+      headers: {
+        apikey: SUPA_KEY,
+        Authorization: `Bearer ${SUPA_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state) }),
+    });
+  } catch(e) {}
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -395,8 +429,11 @@ function loadState() {
 }
 
 async function loadStateFromStorage() {
+  // Try Supabase first, fall back to window.storage
+  const fromSupabase = await supaLoad();
+  if (fromSupabase) return fromSupabase;
   try {
-    const result = await window.storage.get(STORAGE_KEY);
+    const result = await window.storage?.get(STORAGE_KEY);
     if (result && result.value) {
       const parsed = JSON.parse(result.value);
       if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) };
@@ -406,7 +443,9 @@ async function loadStateFromStorage() {
 }
 
 async function saveState(state) {
-  try { await window.storage.set(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  // Save to both local storage and Supabase
+  try { await window.storage?.set(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  await supaSave(state);
 }
 
 function buildSampleState() {
@@ -3799,16 +3838,42 @@ export default function CalendarNotes() {
   // On mount: load from persistent storage and hydrate if found
   useEffect(() => {
     dispatch({type:"PURGE_TRASH"});
-    loadStateFromStorage().then(persisted => {
-      if (persisted) dispatch({type:"HYDRATE", state: persisted});
+    // Supabase is the source of truth — always load from there first
+    supaLoad().then(persisted => {
+      if (persisted) {
+        dispatch({type:"HYDRATE", state: persisted});
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)); } catch(e) {}
+      } else {
+        // Fallback to localStorage if Supabase is unreachable
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.notes && parsed?.milestones) dispatch({type:"HYDRATE", state: { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) }});
+          }
+        } catch(e) {}
+      }
     });
+    // Re-sync when user returns to the tab
+    const onFocus = () => {
+      supaLoad().then(persisted => {
+        if (persisted) dispatch({type:"HYDRATE", state: persisted});
+      });
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  // Save to BOTH localStorage (fast) and window.storage (persistent) on every change
+  // Debounced save — waits 1.5s after last change before syncing to Supabase
+  const saveTimer = useRef(null);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
-    saveState(state);
-    setSavedIndicator(true);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveState(state);
+      setSavedIndicator(true);
+    }, 1500);
+    return () => clearTimeout(saveTimer.current);
   }, [state]);
   const dragRef = useRef(null);
   const grid    = buildCalendarGrid(year, month);
@@ -4295,7 +4360,7 @@ export default function CalendarNotes() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </span>
                 Importar dados
-                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){dispatch({type:"HYDRATE",state:parsed}); setShowMenu(false);}else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses)}; dispatch({type:"HYDRATE",state:newState}); supaSave(newState); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
               </label>
 
               <div style={{ flex:1 }} />
