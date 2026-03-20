@@ -4207,7 +4207,8 @@ export default function CalendarNotes() {
         @keyframes plusPop      { from { opacity: 0; transform: scale(0.6) } to { opacity: 0.85; transform: scale(1) } }
         @keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }
         @keyframes menuSlideIn  { from { transform: translateX(-24px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
-        @keyframes shimmer      { 0%,100% { opacity: 0 } 50% { opacity: 1 } }
+        @keyframes shimmer      { 0%,100% { opacity: 0 } 50% { opacity: 0.5 } }
+        @keyframes fadeOut      { from { opacity: 1 } to { opacity: 0 } }
         @keyframes slideGridLeft  { from { opacity:0; transform:translateX(40px) } to { opacity:1; transform:translateX(0) } }
         @keyframes slideGridRight { from { opacity:0; transform:translateX(-40px) } to { opacity:1; transform:translateX(0) } }
         @keyframes viewFade { 0% { opacity:0 } 30% { opacity:1 } 70% { opacity:1 } 100% { opacity:0 } }
@@ -4252,7 +4253,7 @@ export default function CalendarNotes() {
       <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100dvh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
 
         {isLoading && (
-          <div style={{ position:"absolute", inset:0, zIndex:200, pointerEvents:"none", animation:"shimmer 1.6s ease-in-out infinite", backgroundColor:"rgba(74,107,74,0.45)" }} />
+          <div style={{ position:"absolute", inset:0, zIndex:200, pointerEvents:"none", backgroundColor:"rgba(74,107,74,0.5)", animation:"fadeOut 0.6s ease 0.5s forwards" }} />
         )}
 
         {isMobile ? (
