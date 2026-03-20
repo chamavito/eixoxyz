@@ -3748,11 +3748,30 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-    if (Math.abs(dx) > 50 && dy < 60) {
+    // Only treat as swipe if horizontal movement dominates and exceeds threshold
+    if (Math.abs(dx) > 50 && dy < 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       if (dx < 0) onNavigate(nextM === 0 ? nextY : year, nextM);
       else        onNavigate(prevM === 11 ? prevY : year, prevM);
     }
     touchStartX.current = null;
+  };
+
+  // Determine if a touch sequence was a tap (not a swipe)
+  const cellTouchStart = useRef({});
+  const handleCellTouchStart = (e, date) => {
+    cellTouchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, date };
+  };
+  const handleCellTouchEnd = (e, date) => {
+    const s = cellTouchStart.current;
+    if (!s.date) return;
+    const dx = Math.abs(e.changedTouches[0].clientX - s.x);
+    const dy = Math.abs(e.changedTouches[0].clientY - s.y);
+    // Only open if finger barely moved (tap, not swipe)
+    if (dx < 10 && dy < 10) {
+      e.preventDefault();
+      onDayOpen(date);
+    }
+    cellTouchStart.current = {};
   };
 
   return (
@@ -3778,10 +3797,10 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
           const isWeekend = colIdx === 0 || colIdx === 6;
 
           return (
-            <div key={idx} onClick={() => onDayOpen(cell.date)}
+            <div key={idx}
               style={{ backgroundColor: isCurrentMonth ? (isWeekend ? "#6b8f6b" : "#8BAB8A") : "#3d5c3d", borderRadius:"4px", display:"flex", flexDirection:"column", padding:"4px 3px", cursor:"pointer", overflow:"hidden", border: isToday ? "1.5px solid rgba(255,255,255,0.7)" : "none", minHeight:0 }}
-              onTouchStart={e=>e.stopPropagation()}
-              onTouchEnd={e=>{ e.stopPropagation(); onDayOpen(cell.date); }}>
+              onTouchStart={e => handleCellTouchStart(e, cell.date)}
+              onTouchEnd={e => handleCellTouchEnd(e, cell.date)}>
 
               {/* Day number */}
               <div style={{ fontSize:"11px", fontWeight: isToday ? 700 : 400, color: isCurrentMonth ? (isToday ? "#fff" : "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", marginBottom:"3px", flexShrink:0, lineHeight:1 }}>{cell.day}</div>
@@ -3838,13 +3857,11 @@ export default function CalendarNotes() {
   // On mount: load from persistent storage and hydrate if found
   useEffect(() => {
     dispatch({type:"PURGE_TRASH"});
-    // Supabase is the source of truth — always load from there first
     supaLoad().then(persisted => {
       if (persisted) {
         dispatch({type:"HYDRATE", state: persisted});
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)); } catch(e) {}
       } else {
-        // Fallback to localStorage if Supabase is unreachable
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
@@ -3854,11 +3871,14 @@ export default function CalendarNotes() {
         } catch(e) {}
       }
     });
-    // Re-sync when user returns to the tab — but not right after an import
     const onFocus = () => {
       if (importLock.current) return;
-      supaLoad().then(persisted => {
-        if (persisted) dispatch({type:"HYDRATE", state: persisted});
+      supaLoad().then(remote => {
+        if (!remote) return;
+        // Only apply remote if it's newer than what we have locally
+        const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
+        const remoteTs = remote._savedAt || 0;
+        if (remoteTs > localTs) dispatch({type:"HYDRATE", state: remote});
       });
     };
     window.addEventListener("focus", onFocus);
@@ -3867,13 +3887,15 @@ export default function CalendarNotes() {
 
   const importLock = useRef(false);
 
-  // Debounced save — waits 1.5s after last change before syncing to Supabase
+  // Debounced save — stamps _savedAt timestamp so devices can resolve conflicts
   const saveTimer = useRef(null);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveState(state);
+      const stamped = { ...state, _savedAt: Date.now() };
+      supaSave(stamped);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped)); } catch(e) {}
       setSavedIndicator(true);
     }, 1500);
     return () => clearTimeout(saveTimer.current);
@@ -4014,7 +4036,7 @@ export default function CalendarNotes() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: ${T.appBg}; min-height: 100vh; transition: background 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+        body { background: ${T.appBg}; min-height: 100dvh; transition: background 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
         @media (max-width: 767px) {
           .mobile-title-input { font-size: 16px !important; }
         }
@@ -4062,7 +4084,7 @@ export default function CalendarNotes() {
         input[type="number"] { -moz-appearance: textfield; }
       `}</style>
 
-      <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100vh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
+      <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100dvh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
 
         {isMobile ? (
           /* ── Mobile topbar — identical to editor ── */
@@ -4363,7 +4385,7 @@ export default function CalendarNotes() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </span>
                 Importar dados
-                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses)}; importLock.current=true; dispatch({type:"HYDRATE",state:newState}); supaSave(newState).then(()=>{ setSavedIndicator(true); setTimeout(()=>{ importLock.current=false; }, 5000); }); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses),_savedAt:Date.now()}; importLock.current=true; dispatch({type:"HYDRATE",state:newState}); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); }catch(e){} supaSave(newState).then(()=>{ setSavedIndicator(true); importLock.current=false; }); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
               </label>
 
               <div style={{ flex:1 }} />
