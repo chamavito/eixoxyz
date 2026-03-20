@@ -425,7 +425,7 @@ function loadState() {
       if (parsed && parsed.notes && parsed.milestones) return { reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) };
     }
   } catch(e) {}
-  return buildSampleState();
+  return { notes:{}, milestones:{}, reminders:{}, trash:[], settings:{}, statuses: DEFAULT_STATUSES };
 }
 
 async function loadStateFromStorage() {
