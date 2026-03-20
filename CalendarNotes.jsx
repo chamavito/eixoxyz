@@ -105,6 +105,13 @@ const DEFAULT_STATUSES = [
   { key:"agendado",    label:"Agendado",      color:"#7ec8c8" },
   { key:"publicado",   label:"Publicado",     color:"#86c49a" },
 ];
+
+const POST_STATUSES = {
+  ideia:     { label:"Ideia",    color:"#9EB5C0" },
+  criando:   { label:"Criando",  color:"#B8A4D8" },
+  agendado:  { label:"Agendado", color:"#7EC8C8" },
+  postado:   { label:"Postado",  color:"#86C59A" },
+};
 // Built dynamically from state — use useStatusMap() hook inside components
 // or statusesToMap() for non-component contexts
 function statusesToMap(statuses) {
@@ -2259,7 +2266,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
 
   const [title,    setTitle]   = useState(note.title     || "");
   const [caption,  setCaption] = useState(note.igCaption || "");
-  const [status,   setStatus]  = useState(note.status    || "agendado");
+  const [status,   setStatus]  = useState(note.status && POST_STATUSES[note.status] ? note.status : "ideia");
   const [pubTime,  setPubTime] = useState(note.pubTime   || "09:00");
   const [date,     setDate]    = useState(note.date      || todayISO());
   const [igFormat, setIgFormat]= useState(note.igFormat  || "post");
@@ -2267,6 +2274,8 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
+
+  const postStatus = POST_STATUSES[status] || POST_STATUSES.ideia;
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
@@ -2331,8 +2340,8 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
               <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
                 <button ref={statusAnchorRef} onClick={()=>setStatusOpen(v=>!v)}
-                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:(STATUS_MAP[status]||STATUS_MAP.ideia).color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
-                  {(STATUS_MAP[status]||STATUS_MAP.ideia).label}
+                  style={{ padding:"2px 12px", borderRadius:"20px", border:"none", fontSize:"11px", fontWeight:700, fontFamily:"'DM Mono', monospace", cursor:"pointer", backgroundColor:postStatus.color, color:"#fff", display:"flex", alignItems:"center", gap:"5px" }}>
+                  {postStatus.label}
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -2379,7 +2388,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
           {/* Status dropdown */}
           <DropdownSheet anchorRef={statusAnchorRef} open={statusOpen} onClose={()=>setStatusOpen(false)} width={200}>
             <div style={{ padding:"6px 6px" }}>
-              {Object.entries(STATUS_MAP).map(([key, val]) => {
+              {Object.entries(POST_STATUSES).map(([key, val]) => {
                 const a = status === key;
                 return (
                   <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); }}
@@ -3123,7 +3132,7 @@ function NoteChip({ note, onDragStart, isCurrentMonth, onQuickDelete, onQuickEdi
   const T = useTheme();
   const STATUS_MAP = useStatusMap();
   const isPost = note.platform === "instagram";
-  const status = STATUS_MAP[note.status] || STATUS_MAP.ideia;
+  const status = isPost ? (POST_STATUSES[note.status] || POST_STATUSES.ideia) : (STATUS_MAP[note.status] || STATUS_MAP.ideia);
   const isLarge = note.size === "large";
   const dimmed = !isCurrentMonth;
   const IG_PINK = "#e1306c";
@@ -3243,8 +3252,9 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
 
           {/* Notes */}
           {notes.map(n => {
-            const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
             const isPost = n.platform === "instagram";
+            const st = isPost ? (POST_STATUSES[n.status] || POST_STATUSES.ideia) : (STATUS_MAP[n.status] || STATUS_MAP.ideia);
+            const isPast = date < today;
             return (
               <div key={n.id} onClick={()=>{ onOpenNote(n); onClose(); }}
                 style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
@@ -3254,7 +3264,7 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.title}</div>
                   <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>
-                    {isPost ? "Post" : "Vídeo"}{n.pubTime ? ` · ${n.pubTime}` : ""}
+                    {isPost ? "Post" : "Vídeo"}{!isPast && n.pubTime ? ` · ${n.pubTime}` : ""}
                   </div>
                 </div>
                 <span style={{ fontSize:"9px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: st.color, borderRadius:"4px", padding:"2px 6px", flexShrink:0 }}>{st.label}</span>
@@ -3273,12 +3283,12 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
                 <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.title}</div>
                 <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>Marco</div>
               </div>
-              <MilestoneIcon category={m.category} size={16} color="rgba(255,255,255,0.5)" />
             </div>
           ))}
 
           {/* Reminders */}
           {[...reminders].sort((a,b)=>a.time.localeCompare(b.time)).map(r => (
+            r.title ? (
             <div key={r.id} onClick={()=>{ onOpenReminder(r); onClose(); }}
               style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
               onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(0,0,0,0.22)"}
@@ -3286,9 +3296,10 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
               <div style={{ width:"4px", height:"36px", borderRadius:"2px", backgroundColor:"#AB988A", flexShrink:0 }} />
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:"13px", fontWeight:600, color:"#fff", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.title}</div>
-                <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>Lembrete · {r.time}</div>
+                <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace", marginTop:"2px" }}>Lembrete{!isPast && r.time ? ` · ${r.time}` : ""}</div>
               </div>
             </div>
+            ) : null
           ))}
         </div>
 
@@ -3397,8 +3408,9 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
   );
 }
 
-function ReminderBadge({ reminder, isCurrentMonth, onDelete, onDragStart, onContextMenu, onOpen }) {
+function ReminderBadge({ reminder, isCurrentMonth, date, today, onDelete, onDragStart, onContextMenu, onOpen }) {
   const dimmed = !isCurrentMonth;
+  const isPast = date < today;
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();onDragStart&&onDragStart(e,reminder);}}
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(reminder); }}
@@ -3407,10 +3419,12 @@ function ReminderBadge({ reminder, isCurrentMonth, onDelete, onDragStart, onCont
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"4px" }}>
         <span style={{ fontSize:"10px", fontWeight: dimmed?400:700, color: dimmed?"rgba(255,255,255,0.3)":"#79A679", fontFamily:"'Inter', sans-serif", whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.3", flex:1 }}>{reminder.title}</span>
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:"3px" }}>
-        <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={dimmed?"rgba(255,255,255,0.2)":"rgba(121,166,121,0.7)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span style={{ fontSize:"8px", fontWeight:700, color: dimmed?"rgba(255,255,255,0.2)":"rgba(121,166,121,0.85)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}>{reminder.time}</span>
-      </div>
+      {!isPast && (
+        <div style={{ display:"flex", alignItems:"center", gap:"3px" }}>
+          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={dimmed?"rgba(255,255,255,0.2)":"rgba(121,166,121,0.7)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style={{ fontSize:"8px", fontWeight:700, color: dimmed?"rgba(255,255,255,0.2)":"rgba(121,166,121,0.85)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}>{reminder.time}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -3541,7 +3555,7 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
           {reminders.length > 0 && (
             <div style={{ marginTop:(sortedNotes.length > 0 || milestones.length > 0) ? "4px" : "0px", display:"flex", flexDirection:"column", gap:"2px" }}>
               {[...reminders].sort((a,b)=>a.time.localeCompare(b.time)).map(r => (
-                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} />
+                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} date={cellData.date} today={today} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} />
               ))}
             </div>
           )}
@@ -3688,7 +3702,7 @@ function MobileYearPicker({ currentYear, currentMonth, onSelect, onClose }) {
     </>
   );
 
-  if (isMobile) {}  // unused — always use centered modal
+  // always use centered modal
 
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:3000, backgroundColor:"rgba(20,40,20,0.6)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", animation:"fadeIn 0.15s ease" }}>
@@ -3703,6 +3717,7 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
   const scrollRef   = useRef(null);
   const todayRef    = useRef(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const days = buildMonthDays(year, month);
 
@@ -3721,10 +3736,12 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
   const prevY = month === 0  ? year - 1 : year;
   const nextY = month === 11 ? year + 1 : year;
 
-  // Scroll to today on mount / month change — centered in viewport
+  // Scroll to today — hide until positioned to avoid visible jump
   useEffect(() => {
+    setReady(false);
     const t = setTimeout(() => {
       if (todayRef.current) todayRef.current.scrollIntoView({ behavior:"auto", block:"center" });
+      setReady(true);
     }, 80);
     return () => clearTimeout(t);
   }, [year, month]);
@@ -3739,7 +3756,7 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
 
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, position:"relative" }}>
-      <div ref={scrollRef} style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch" }}>
+      <div ref={scrollRef} style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch", opacity: ready ? 1 : 0, transition: ready ? "opacity 0.2s ease-in-out" : "none" }}>
 
         {/* Top sentinel — shows previous month */}
         <button style={sentinelBtn} onClick={()=>setShowPicker(true)}>
@@ -3753,6 +3770,7 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
           const dayMiles     = milestones[date] || [];
           const dayReminders = (reminders[date] || []).slice().sort((a,b)=>a.time.localeCompare(b.time));
           const isToday      = date === today;
+          const isPast       = date < today;
           const isWeekend    = dow === 0 || dow === 6;
           const hasItems     = dayNotes.length > 0 || dayMiles.length > 0 || dayReminders.length > 0;
 
@@ -3777,14 +3795,14 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
               <div style={{ flex:1, paddingRight:"12px", display:"flex", flexDirection:"column", gap:"4px", paddingTop:"4px", minHeight:"30px" }}>
                 {!hasItems && <div style={{ height:"30px" }} />}
                 {dayNotes.map(n => {
-                  const st = statusMap[n.status] || statusMap.ideia;
                   const isPost = n.platform === "instagram";
-                  const accent = isPost ? "#e1306c" : n.size === "large" ? "#FF0032" : st.color;
+                  const st = isPost ? (POST_STATUSES[n.status] || POST_STATUSES.ideia) : (statusMap[n.status] || statusMap.ideia);
+                  const accent = isPost ? st.color : n.size === "large" ? "#FF0032" : st.color;
                   return (
                     <div key={n.id} style={{ display:"flex", alignItems:"center", gap:"8px", backgroundColor:"rgba(0,0,0,0.18)", borderRadius:"6px", padding:"5px 8px" }}>
                       <div style={{ width:"3px", minHeight:"14px", borderRadius:"2px", backgroundColor:accent, flexShrink:0 }} />
                       <span style={{ fontSize:"12px", fontWeight:600, color:"rgba(255,255,255,0.9)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{n.title || "Sem título"}</span>
-                      <span style={{ fontSize:"8px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", backgroundColor:accent+"cc", borderRadius:"3px", padding:"1px 5px", flexShrink:0 }}>{isPost?"Post":st.label}</span>
+                      <span style={{ fontSize:"8px", fontWeight:700, color:"#fff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", backgroundColor:accent+"cc", borderRadius:"3px", padding:"1px 5px", flexShrink:0 }}>{st.label}</span>
                     </div>
                   );
                 })}
@@ -3796,7 +3814,7 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
                 {dayReminders.map(r => (
                   <div key={r.id} style={{ display:"flex", alignItems:"center", gap:"8px", backgroundColor:"#ffffff", borderRadius:"6px", padding:"5px 8px" }}>
                     <span style={{ fontSize:"12px", fontWeight:500, color:"#83B383", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{r.title}</span>
-                    <span style={{ fontSize:"8px", color:"#83B383", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.7 }}>{r.time}</span>
+                    <span style={{ fontSize:"8px", color:"#83B383", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.7 }}>{!isPast ? r.time : ""}</span>
                   </div>
                 ))}
               </div>
@@ -3828,29 +3846,44 @@ function MobileCalendarList({ year, month, today, notes, milestones, reminders, 
 function MobileGridView({ year, month, today, notes, milestones, reminders, onDayOpen, onNavigate, onOpenNote, onOpenMilestone, onOpenReminder, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
   const STATUS_MAP = useStatusMap();
   const containerRef = useRef(null);
+  const [slideDir, setSlideDir] = useState(null); // 'left' | 'right' | null
+  const [displayYear, setDisplayYear] = useState(year);
+  const [displayMonth, setDisplayMonth] = useState(month);
+  const animating = useRef(false);
 
-  // Build grid for current month only (no overflow rows)
-  const firstDow = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevM = month === 0 ? 11 : month - 1;
-  const prevY = month === 0 ? year - 1 : year;
-  const prevDays = new Date(prevY, prevM + 1, 0).getDate();
-  const nextM = month === 11 ? 0 : month + 1;
-  const nextY = month === 11 ? year + 1 : year;
+  // When year/month prop changes, animate slide
+  useEffect(() => {
+    if (animating.current) return;
+    if (year === displayYear && month === displayMonth) return;
+    const isForward = year > displayYear || (year === displayYear && month > displayMonth);
+    const dir = isForward ? 'left' : 'right';
+    setSlideDir(dir);
+    animating.current = true;
+    const t = setTimeout(() => {
+      setDisplayYear(year);
+      setDisplayMonth(month);
+      setSlideDir(null);
+      animating.current = false;
+    }, 260);
+    return () => clearTimeout(t);
+  }, [year, month]);
 
-  const cells = [];
-  for (let i = firstDow - 1; i >= 0; i--) {
-    const d = prevDays - i;
-    cells.push({ date: toISODate(prevY, prevM, d), day: d, isCurrentMonth: false });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ date: toISODate(year, month, d), day: d, isCurrentMonth: true });
-  }
-  while (cells.length % 7 !== 0) {
-    const d = cells.length - firstDow - daysInMonth + 1;
-    cells.push({ date: toISODate(nextY, nextM, d), day: d, isCurrentMonth: false });
-  }
+  const buildCells = (y, m) => {
+    const firstDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const prevM = m === 0 ? 11 : m - 1;
+    const prevY = m === 0 ? y - 1 : y;
+    const prevDays = new Date(prevY, prevM + 1, 0).getDate();
+    const nextM = m === 11 ? 0 : m + 1;
+    const nextY = m === 11 ? y + 1 : y;
+    const cells = [];
+    for (let i = firstDow - 1; i >= 0; i--) cells.push({ date: toISODate(prevY, prevM, prevDays - i), day: prevDays - i, isCurrentMonth: false });
+    for (let d = 1; d <= daysInMonth; d++) cells.push({ date: toISODate(y, m, d), day: d, isCurrentMonth: true });
+    while (cells.length % 7 !== 0) { const d = cells.length - firstDow - daysInMonth + 1; cells.push({ date: toISODate(nextY, nextM, d), day: d, isCurrentMonth: false }); }
+    return cells;
+  };
 
+  const cells = buildCells(displayYear, displayMonth);
   const numRows = cells.length / 7;
 
   const cellTouchStart = useRef({});
@@ -3862,15 +3895,18 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
     if (!s.date) return;
     const dx = Math.abs(e.changedTouches[0].clientX - s.x);
     const dy = Math.abs(e.changedTouches[0].clientY - s.y);
-    if (dx < 10 && dy < 10) {
-      e.preventDefault(); // prevents the subsequent onClick from firing
-      onDayOpen(date);
-    }
+    if (dx < 10 && dy < 10) { e.preventDefault(); onDayOpen(date); }
     cellTouchStart.current = {};
   };
 
+  const slideAnimation = slideDir === 'left'
+    ? 'slideGridLeft 0.26s cubic-bezier(0.4,0,0.2,1) forwards'
+    : slideDir === 'right'
+    ? 'slideGridRight 0.26s cubic-bezier(0.4,0,0.2,1) forwards'
+    : 'none';
+
   return (
-    <div ref={containerRef} style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, padding:"4px 2px 4px", userSelect:"none" }}>
+    <div ref={containerRef} style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, padding:"4px 2px 4px", userSelect:"none", overflow:"hidden" }}>
 
       {/* Weekday headers */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"3px", flexShrink:0 }}>
@@ -3879,8 +3915,8 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
         ))}
       </div>
 
-      {/* Calendar grid — fills remaining height */}
-      <div style={{ flex:1, display:"grid", gridTemplateColumns:"repeat(7,1fr)", gridTemplateRows:`repeat(${numRows},1fr)`, gap:"3px", minHeight:0 }}>
+      {/* Calendar grid — animated */}
+      <div style={{ flex:1, display:"grid", gridTemplateColumns:"repeat(7,1fr)", gridTemplateRows:`repeat(${numRows},1fr)`, gap:"3px", minHeight:0, animation: slideAnimation }}>
         {cells.map((cell, idx) => {
           const isToday = cell.date === today;
           const isCurrentMonth = cell.isCurrentMonth;
@@ -3892,38 +3928,39 @@ function MobileGridView({ year, month, today, notes, milestones, reminders, onDa
 
           return (
             <div key={idx}
-              style={{ backgroundColor: isCurrentMonth ? (isWeekend ? "#6b8f6b" : "#8BAB8A") : "#3d5c3d", borderRadius:"4px", display:"flex", flexDirection:"column", padding:"4px 3px", cursor:"pointer", overflow:"hidden", border: isToday ? "1.5px solid rgba(255,255,255,0.7)" : "none", minHeight:0 }}
+              style={{ backgroundColor: isCurrentMonth ? (isWeekend ? "#6b8f6b" : "#8BAB8A") : "#3d5c3d", borderRadius:"4px", display:"flex", flexDirection:"column", padding:"3px", cursor:"pointer", overflow:"hidden", border: isToday ? "1.5px solid rgba(255,255,255,0.7)" : "none", minHeight:0 }}
               onClick={() => onDayOpen(cell.date)}
               onTouchStart={e => handleCellTouchStart(e, cell.date)}
               onTouchEnd={e => handleCellTouchEnd(e, cell.date)}>
 
               {/* Day number */}
-              <div style={{ fontSize:"11px", fontWeight: isToday ? 700 : 400, color: isCurrentMonth ? (isToday ? "#fff" : "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", marginBottom:"3px", flexShrink:0, lineHeight:1 }}>{cell.day}</div>
+              <div style={{ fontSize:"11px", fontWeight: isToday ? 700 : 400, color: isCurrentMonth ? (isToday ? "#fff" : "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", marginBottom:"2px", flexShrink:0, lineHeight:1, paddingLeft:"1px" }}>{cell.day}</div>
 
-              {/* Pills */}
+              {/* White chips */}
               <div style={{ flex:1, display:"flex", flexDirection:"column", gap:"2px", overflow:"hidden", minHeight:0 }}>
                 {dayNotes.slice(0,2).map(n => {
-                  const st = STATUS_MAP[n.status] || STATUS_MAP.ideia;
                   const isPost = n.platform === "instagram";
-                  const accent = isPost ? "#e1306c" : n.size === "large" ? "#FF0032" : st.color;
+                  const st = isPost ? (POST_STATUSES[n.status] || POST_STATUSES.ideia) : (STATUS_MAP[n.status] || STATUS_MAP.ideia);
+                  const bg = isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.12)";
+                  const textColor = isCurrentMonth ? (isPost ? "#e1306c" : "#5F805E") : "rgba(255,255,255,0.3)";
                   return (
-                    <div key={n.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? accent+"99" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
-                      <span style={{ fontSize:"8px", fontWeight:600, color: isCurrentMonth ? "#fff" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{n.title || "—"}</span>
+                    <div key={n.id} style={{ backgroundColor: bg, borderRadius:"3px", padding:"2px 3px", overflow:"hidden", flexShrink:0, minHeight: isPost ? undefined : "52px" }}>
+                      <div style={{ fontSize:"10px", fontWeight:600, color: textColor, fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace: isPost ? "nowrap" : "normal", WebkitLineClamp: isPost ? undefined : 3, display: isPost ? undefined : "-webkit-box", WebkitBoxOrient: isPost ? undefined : "vertical", lineHeight:1.3 }}>{n.title || "—"}</div>
                     </div>
                   );
                 })}
                 {dayMiles.slice(0,1).map(m => (
-                  <div key={m.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? "#5F805E" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
-                    <span style={{ fontSize:"8px", fontWeight:600, color: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{m.title}</span>
+                  <div key={m.id} style={{ backgroundColor: isCurrentMonth ? "#5F805E" : "rgba(255,255,255,0.12)", borderRadius:"3px", padding:"2px 3px", overflow:"hidden", flexShrink:0 }}>
+                    <div style={{ fontSize:"10px", fontWeight:600, color: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{m.title}</div>
                   </div>
                 ))}
                 {dayReminders.slice(0,1).map(r => (
-                  <div key={r.id} style={{ display:"flex", alignItems:"center", backgroundColor: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.08)", borderRadius:"3px", padding:"2px 4px", overflow:"hidden", flexShrink:0 }}>
-                    <span style={{ fontSize:"8px", fontWeight:500, color: isCurrentMonth ? "#83B383" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{r.title}</span>
+                  <div key={r.id} style={{ backgroundColor: isCurrentMonth ? "#ffffff" : "rgba(255,255,255,0.12)", borderRadius:"3px", padding:"2px 3px", overflow:"hidden", flexShrink:0 }}>
+                    <div style={{ fontSize:"10px", fontWeight:500, color: isCurrentMonth ? "#78A679" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{r.title}</div>
                   </div>
                 ))}
                 {(dayNotes.length + dayMiles.length + dayReminders.length) > 3 && isCurrentMonth && (
-                  <div style={{ fontSize:"8px", color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", paddingLeft:"3px", lineHeight:1.2, flexShrink:0 }}>+{dayNotes.length + dayMiles.length + dayReminders.length - 3}</div>
+                  <div style={{ fontSize:"8px", color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", paddingLeft:"2px", lineHeight:1.2, flexShrink:0 }}>+{dayNotes.length + dayMiles.length + dayReminders.length - 3}</div>
                 )}
               </div>
             </div>
@@ -3968,7 +4005,6 @@ export default function CalendarNotes() {
         } catch(e) {}
       }
       setIsLoading(false);
-      }
     });
     const onFocus = () => {
       if (importLock.current) return;
@@ -4017,10 +4053,19 @@ export default function CalendarNotes() {
   const [mobileView, setMobileView] = useState(() => {
     try { return localStorage.getItem("calendarMobileView") || "grid"; } catch(e) { return "grid"; }
   });
+  const [viewTransitionOpacity, setViewTransitionOpacity] = useState(0);
 
-  useEffect(() => {
-    try { localStorage.setItem("calendarMobileView", mobileView); } catch(e) {}
-  }, [mobileView]);
+  const handleToggleView = () => {
+    setViewTransitionOpacity(1);
+    setTimeout(() => {
+      setMobileView(v => {
+        const next = v === "list" ? "grid" : "list";
+        try { localStorage.setItem("calendarMobileView", next); } catch(e) {}
+        return next;
+      });
+      setTimeout(() => setViewTransitionOpacity(0), 50);
+    }, 150);
+  };
   const [showNavPicker, setShowNavPicker] = useState(false);
   const prevMonth = () => { if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); };
   const nextMonth = () => { if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); };
@@ -4163,6 +4208,9 @@ export default function CalendarNotes() {
         @keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }
         @keyframes menuSlideIn  { from { transform: translateX(-24px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
         @keyframes shimmer      { 0%,100% { opacity: 0 } 50% { opacity: 1 } }
+        @keyframes slideGridLeft  { from { opacity:0; transform:translateX(40px) } to { opacity:1; transform:translateX(0) } }
+        @keyframes slideGridRight { from { opacity:0; transform:translateX(-40px) } to { opacity:1; transform:translateX(0) } }
+        @keyframes viewFade { 0% { opacity:0 } 30% { opacity:1 } 70% { opacity:1 } 100% { opacity:0 } }
         .sidebar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.3s; }
         .sidebar-scroll:hover { scrollbar-color: #4B654B transparent; }
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
@@ -4208,7 +4256,7 @@ export default function CalendarNotes() {
         )}
 
         {isMobile ? (
-          /* ── Mobile topbar — identical to editor ── */
+          /* ── Mobile topbar ── */
           <div style={{ position:"sticky", top:0, zIndex:100, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)", backgroundColor:"rgba(73,103,73,0.92)", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
             <button onClick={()=>setShowMenu(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -4217,21 +4265,21 @@ export default function CalendarNotes() {
             </button>
             <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:"8px", display:"flex", alignItems:"center", gap:"4px" }}>
               <span style={{ fontSize:"15px", fontWeight:700, color:"#fff", fontFamily:"'Inter', sans-serif", letterSpacing:"-0.01em" }}>
-                {(() => { const d=new Date(); return `${d.getDate()} de ${PT_MONTHS_FULL[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; })()}
+                {mobileView === "grid" && (year !== new Date().getFullYear() || month !== new Date().getMonth())
+                  ? `${PT_MONTHS_FULL[month]} de ${year}`
+                  : (() => { const d=new Date(); return `${d.getDate()} de ${PT_MONTHS_FULL[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; })()
+                }
               </span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-              {/* View toggle */}
-              <button onClick={()=>setMobileView(v => v==="list" ? "grid" : "list")}
+              <button onClick={handleToggleView}
                 style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"8px", cursor:"pointer", padding:"5px 8px", color:"rgba(255,255,255,0.7)", display:"flex", alignItems:"center" }}>
                 {mobileView === "list" ? (
-                  /* Grid icon */
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
                   </svg>
                 ) : (
-                  /* List icon */
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                   </svg>
@@ -4265,33 +4313,61 @@ export default function CalendarNotes() {
         )}
         {isMobile ? (
           mobileView === "list" ? (
-            <MobileCalendarList
-              year={year} month={month} today={today}
-              notes={state.notes} milestones={state.milestones} reminders={state.reminders}
-              statusMap={statusMap}
-              onDayOpen={date => setMobileDayModal({ date })}
-              onNavigate={(y, m) => { setYear(y); setMonth(m); }}
-              scrollToTodayRef={scrollToTodayFn}
-            />
+            <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, position:"relative" }}>
+              <MobileCalendarList
+                year={year} month={month} today={today}
+                notes={state.notes} milestones={state.milestones} reminders={state.reminders}
+                statusMap={statusMap}
+                onDayOpen={date => setMobileDayModal({ date })}
+                onNavigate={(y, m) => { setYear(y); setMonth(m); }}
+                scrollToTodayRef={scrollToTodayFn}
+              />
+              <div style={{ position:"absolute", inset:0, backgroundColor:"#4A6B4A", zIndex:50, opacity:viewTransitionOpacity, transition:"opacity 0.18s ease-in-out", pointerEvents: viewTransitionOpacity > 0 ? "auto" : "none" }} />
+              {/* FAB — create */}
+              <button onClick={() => setQuickCreate({ date: today, type:"note" })}
+                style={{ position:"absolute", bottom:"20px", right:"16px", width:"52px", height:"52px", borderRadius:"50%", backgroundColor:"#4A6B4A", border:"1.5px solid rgba(255,255,255,0.2)", boxShadow:"0 4px 20px rgba(0,0,0,0.35)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", zIndex:60 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              </button>
+            </div>
           ) : (
-            /* Mobile grid view — full height, swipeable, current month only */
-            <MobileGridView
-              year={year} month={month} today={today}
-              notes={state.notes} milestones={state.milestones} reminders={state.reminders}
-              onDayOpen={date => setMobileDayModal({date})}
-              onOpenWithAction={handleOpenWithAction}
-              onOpenNote={note => { if(note.platform==="instagram") setOpenEditor({type:"post",item:note}); else setOpenEditor({type:"note-full",item:note}); }}
-              onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})}
-              onOpenReminder={r=>setOpenReminder(r)}
-              onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)}
-              onQuickEditStatus={handleQuickEditStatus}
-              onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}}
-              onQuickDeleteMilestone={handleQuickDeleteMilestone}
-              onAddReminder={handleAddReminder}
-              onDeleteReminder={handleDeleteReminder}
-              selectedIds={selectedIds}
-              onNavigate={(y,m)=>{setYear(y);setMonth(m);}}
-            />
+            /* Mobile grid view */
+            <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0, position:"relative" }}>
+              <MobileGridView
+                year={year} month={month} today={today}
+                notes={state.notes} milestones={state.milestones} reminders={state.reminders}
+                onDayOpen={date => setMobileDayModal({date})}
+                onOpenWithAction={handleOpenWithAction}
+                onOpenNote={note => { if(note.platform==="instagram") setOpenEditor({type:"post",item:note}); else setOpenEditor({type:"note-full",item:note}); }}
+                onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})}
+                onOpenReminder={r=>setOpenReminder(r)}
+                onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)}
+                onQuickEditStatus={handleQuickEditStatus}
+                onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}}
+                onQuickDeleteMilestone={handleQuickDeleteMilestone}
+                onAddReminder={handleAddReminder}
+                onDeleteReminder={handleDeleteReminder}
+                selectedIds={selectedIds}
+                onNavigate={(y,m)=>{setYear(y);setMonth(m);}}
+              />
+              {/* Floating back-to-today button */}
+              {(year !== new Date().getFullYear() || month !== new Date().getMonth()) && (
+                <button onClick={goToday}
+                  style={{ position:"absolute", bottom:"20px", left:"50%", transform:"translateX(-50%)", background:"rgba(74,107,74,0.92)", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.2)", borderRadius:"20px", padding:"8px 18px", color:"#fff", fontSize:"12px", fontWeight:700, fontFamily:"'Inter', sans-serif", cursor:"pointer", letterSpacing:"0.02em", boxShadow:"0 4px 20px rgba(0,0,0,0.3)", animation:"fadeIn 0.25s ease", whiteSpace:"nowrap", zIndex:60 }}>
+                  Voltar para hoje
+                </button>
+              )}
+              {/* FAB — create */}
+              <button onClick={() => setQuickCreate({ date: today, type:"note" })}
+                style={{ position:"absolute", bottom:"20px", right:"16px", width:"52px", height:"52px", borderRadius:"50%", backgroundColor:"#4A6B4A", border:"1.5px solid rgba(255,255,255,0.2)", boxShadow:"0 4px 20px rgba(0,0,0,0.35)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", zIndex:60 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              </button>
+              {/* View transition fade overlay */}
+              <div style={{ position:"absolute", inset:0, backgroundColor:"#4A6B4A", zIndex:50, opacity:viewTransitionOpacity, transition:"opacity 0.18s ease-in-out", pointerEvents: viewTransitionOpacity > 0 ? "auto" : "none" }} />
+            </div>
           )
         ) : (
         <div ref={gridRef} style={{ position:"relative", userSelect: lassoStart.current ? "none" : "auto", flex:1, display:"flex", flexDirection:"column", minHeight:0 }}
