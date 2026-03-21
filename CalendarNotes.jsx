@@ -90,8 +90,6 @@ const useTheme = () => useContext(ThemeCtx);
 
 const BROLL_COLOR  = "#50956E";
 
-// Shared description — persists across all notes in the session
-let sharedDescriptionStore = "";
 
 const CAMERA_COLOR = "#1e293b";
 
@@ -1191,12 +1189,10 @@ function InlineDatePicker({ value, onChange, light }) {
         </span>
         <button onClick={nextMo} style={{ background:"none", border:"none", color:c.nav, cursor:"pointer", fontSize:"16px", padding:"2px 4px", borderRadius:"4px", lineHeight:1 }}>›</button>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:"4px" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7, 1fr)" }}>
         {PT_DAYS.map((d,i) => (
-          <div key={i} style={{ textAlign:"center", fontSize:"9px", fontWeight:700, color:c.dayHdr, fontFamily:"'DM Mono', monospace", textTransform:"uppercase", padding:"2px 0" }}>{d}</div>
+          <div key={i} style={{ textAlign:"center", fontSize:"9px", fontWeight:700, color:c.dayHdr, fontFamily:"'DM Mono', monospace", textTransform:"uppercase", padding:"2px 0 4px" }}>{d}</div>
         ))}
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"2px" }}>
         {cells.map((cell, i) => {
           const iso = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(cell.day).padStart(2,"0")}`;
           const isSelected = cell.cur && iso === selectedDate;
@@ -1343,19 +1339,10 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   const [propPatrocinador, setPropPatrocinador] = useState(note?.propPatrocinador || "");
 
   useEffect(() => { if (size === "small" && (status === "aroll" || status === "broll")) setStatus("ideia"); }, [size]);
-  const [sidebarOrder, setSidebarOrder] = useState(["titulos","data","status","descricao","insercoes","tags","perf","moodboard"]);
-  const [sidebarReorder, setSidebarReorder] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState({ moodboard: true });
-  const sidebarDragRef = useRef(null);
-  const [reorderHeld, setReorderHeld] = useState(null); // index being dragged
-
-  useEffect(() => {
-    const clear = () => setReorderHeld(null);
-    window.addEventListener("mouseup", clear);
-    return () => window.removeEventListener("mouseup", clear);
-  }, []);
+  const [sidebarOrder, setSidebarOrder] = useState(["titulos","data","status","descricao","tags","moodboard"]);
+  const [sidebarHidden, setSidebarHidden] = useState({ moodboard: true, insercoes: true, perf: true });
   const [sidebarCollapsed, setSidebarCollapsed] = useState({});
-  const [sharedDesc, setSharedDesc]  = useState(sharedDescriptionStore);
+  const [description, setDescription] = useState(note?.description || "");
   const moodRef = useRef(null);
   const stats     = countStats(content);
   const statusObj = STATUS_MAP[status] || STATUS_MAP.ideia;
@@ -1371,6 +1358,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
     title: title.trim(), titleB, titleC, titleWinner,
     content, size, status,
     date: noteDate,
+    description,
     tags, insercoes, perf, broll,
     moodboard, propPatrocinador,
   });
@@ -1459,52 +1447,11 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
         ) : (
         <div style={{ width:"320px", flexShrink:0, display:"flex", flexDirection:"column", borderRight:"1px solid rgba(255,255,255,0.08)", backgroundColor:"transparent", position:"relative" }}>
 
-          <div style={{ flexShrink:0, display:"flex", alignItems:"center", padding:"14px 14px", backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", backgroundColor:"rgba(87,119,87,0.25)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-            <button onClick={()=>{ setSidebarReorder(v=>!v); setReorderHeld(null); }}
-              style={{ ...ghostBtn, padding:"7px 14px", fontSize:"12px", border: sidebarReorder ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.35)", backgroundColor: sidebarReorder ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)", borderRadius:"8px", display:"flex", alignItems:"center", gap:"6px" }}>
-              ⠿ {sidebarReorder ? "Concluído" : "Reordenar"}
-            </button>
-          </div>
           <div className="sidebar-scroll" style={{ flex:1, overflowY:"auto", position:"relative" }}>
 
-            <div style={{ display:"flex", flexDirection:"column", gap: sidebarReorder ? "4px" : "20px", padding:"14px 14px 24px" }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:"20px", padding:"14px 14px 24px" }}>
                 {sidebarOrder.map((sectionKey, idx) => {
                   const labelMap = { titulos:"Títulos alt.", titulo:"Título", data:"Data de publicação", status:"Status", descricao:"Descrição", insercoes:"Inserções", tags:"Tags", perf:"Performance", moodboard:"Moodboard" };
-
-                  const isHeld    = reorderHeld === idx;
-
-                  const handleMouseEnterReorder = () => {
-                    if (reorderHeld === null || reorderHeld === idx) return;
-                    const next = [...sidebarOrder];
-                    const [moved] = next.splice(reorderHeld, 1);
-                    next.splice(idx, 0, moved);
-                    setSidebarOrder(next);
-                    setReorderHeld(idx);
-                  };
-
-                  if (sidebarReorder) {
-                    const isHidden = !!sidebarHidden[sectionKey];
-                    return (
-                    <div key={sectionKey} style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-                      <div
-                        onMouseDown={() => !isHidden && setReorderHeld(idx)}
-                        onMouseUp={() => setReorderHeld(null)}
-                        onMouseEnter={handleMouseEnterReorder}
-                        style={{ flex:1, display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:`1px solid ${isHeld ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.12)"}`, backgroundColor: isHeld ? "rgba(255,255,255,0.14)" : isHidden ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.05)", cursor: isHidden ? "default" : isHeld ? "grabbing" : "grab", transition:"background 0.12s, border-color 0.12s, transform 0.18s cubic-bezier(0.4,0,0.2,1)", userSelect:"none", transform: isHeld ? "scale(1.02)" : "scale(1)", boxShadow: isHeld ? "0 4px 16px rgba(0,0,0,0.3)" : "none", opacity: isHidden ? 0.4 : 1 }}>
-                        <span style={{ fontSize:"14px", color: isHeld ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)", lineHeight:1, flexShrink:0, transition:"color 0.12s" }}>⠿</span>
-                        <span style={{ fontSize:"11px", fontWeight:700, color: isHeld ? "#fff" : "rgba(255,255,255,0.7)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", transition:"color 0.12s" }}>{labelMap[sectionKey]}</span>
-                      </div>
-                      <button
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={() => setSidebarHidden(p => ({ ...p, [sectionKey]: !p[sectionKey] }))}
-                        style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", color: isHidden ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.55)", display:"flex", alignItems:"center", flexShrink:0, transition:"color 0.15s" }}
-                        onMouseEnter={e => e.currentTarget.style.color = isHidden ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.9)"}
-                        onMouseLeave={e => e.currentTarget.style.color = isHidden ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.55)"}>
-                        {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                    );
-                  }
 
                   const isCollapsed = !!sidebarCollapsed[sectionKey];
                   const toggleCollapse = () => setSidebarCollapsed(p => ({ ...p, [sectionKey]: !p[sectionKey] }));
@@ -1512,30 +1459,31 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                   // Skip sections toggled off
                   if (sidebarHidden[sectionKey]) return null;
 
-                  const SectionHeader = ({ label, icon: IconComp }) => (
-                    <button onClick={toggleCollapse} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom: isCollapsed ? 0 : "0" }}>
-                      <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                        {IconComp && <IconComp size={10} strokeWidth={2.5} />}
-                        {label}
-                      </span>
-                      <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.25)", lineHeight:1, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition:"transform 0.2s ease", display:"inline-block" }}>▾</span>
-                    </button>
-                  );
+                  const boxStyle = { backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" };
+                  const previewText = { fontSize:"13px", fontWeight:500, color:"rgba(255,255,255,0.7)", fontFamily:"'Inter', sans-serif", lineHeight:1.4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" };
+                  const previewLine = { borderBottom:"1px solid rgba(255,255,255,0.1)", height:"1px", margin:"6px 0" };
+
 
                   if (sectionKey === "titulos") {
                     const hasMany = (titleB.trim() || titleC.trim()) && size === "large";
                     const winA = titleWinner === "A", winB = titleWinner === "B", winC = titleWinner === "C";
                     const previewTitle = titleWinner === "B" ? titleB : titleWinner === "C" ? titleC : title;
                     return (
-                      <div key="titulos">
-                        <SectionHeader label="Títulos alternativos" />
-                        {isCollapsed && previewTitle.trim() && (
-                          <div style={{ fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", lineHeight:1.5, padding:"4px 2px 0", marginTop:"-4px" }}>
-                            {titleWinner && <Star size={9} strokeWidth={0} fill="#f5c842" style={{ marginRight:"5px", verticalAlign:"middle", display:"inline" }} />}
-                            {previewTitle}
+                      <div key="titulos" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                        <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Títulos alternativos
+                        </span>
+                      </button>
+                        {isCollapsed && (
+                          <div style={boxStyle}>
+                            <span style={{ ...previewText }}>
+                              {titleWinner && <Star size={9} strokeWidth={0} fill="#f5c842" style={{ marginRight:"5px", verticalAlign:"middle", display:"inline" }} />}
+                              {previewTitle || <span style={{ opacity:0.35 }}>—</span>}
+                            </span>
                           </div>
                         )}
-                        <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                        <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", display:"flex", flexDirection:"column", gap:"8px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                             <TitleField lbl="A" val={title} set={setTitle} ph="Título principal..." win={winA} dim={hasMany && titleWinner && !winA} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winA ? null : "A")} />
                             {size === "large" && (<>
@@ -1557,14 +1505,18 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                       return raw.charAt(0).toUpperCase() + raw.slice(1);
                     })();
                     return (
-                    <div key="data">
-                      <SectionHeader label="Data de publicação" />
-                      {isCollapsed && datePreview && (
-                        <div style={{ fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", lineHeight:1.5, padding:"4px 2px 0", marginTop:"-4px" }}>
-                          {datePreview}
+                    <div key="data" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Data de publicação
+                        </span>
+                      </button>
+                      {isCollapsed && (
+                        <div style={boxStyle}>
+                          <span style={previewText}>{datePreview || <span style={{ opacity:0.35 }}>—</span>}</span>
                         </div>
                       )}
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           <InlineDatePicker value={noteDate} onChange={v=>{setNoteDate(v);setDateError("");}} />
                           {dateError && <span style={{ fontSize:"10px", color:"#fca5a5", fontFamily:"'DM Mono', monospace", marginTop:"6px", display:"block" }}>{dateError}</span>}
@@ -1575,14 +1527,20 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                   }
 
                   if (sectionKey === "status") return (
-                    <div key="status">
-                      <SectionHeader label="Status" />
-                      {isCollapsed && STATUS_MAP[status] && (
-                        <div style={{ fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", padding:"4px 2px 0", marginTop:"-4px" }}>
-                          {STATUS_MAP[status].label}
+                    <div key="status" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Status
+                        </span>
+                      </button>
+                      {isCollapsed && (
+                        <div style={boxStyle}>
+                          <span style={{ ...previewText, color: STATUS_MAP[status]?.color || "rgba(255,255,255,0.7)" }}>
+                            {STATUS_MAP[status]?.label || "—"}
+                          </span>
                         </div>
                       )}
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", display:"flex", flexDirection:"column", gap:"5px", marginBottom:"2px" }}>
                           {Object.entries(STATUS_MAP).filter(([key]) => size === "large" || (key !== "aroll" && key !== "broll")).map(([key, val]) => {
                             const a = status === key;
@@ -1601,19 +1559,32 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                   );
 
                   if (sectionKey === "descricao") return (
-                    <div key="descricao">
-                      <SectionHeader label="Descrição" />
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                    <div key="descricao" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Descrição
+                        </span>
+                      </button>
+                      {isCollapsed && (
+                        <div style={boxStyle}>
+                          {description.trim() ? (
+                            <span style={previewText}>{description.trim()}</span>
+                          ) : (
+                            <div style={previewLine} />
+                          )}
+                        </div>
+                      )}
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"8px" }}>
                           <textarea
-                            value={sharedDesc} onChange={e=>{setSharedDesc(e.target.value);sharedDescriptionStore=e.target.value;}}
-                            placeholder={"Descrição padrão do vídeo...\n\nEx: links, redes sociais, hashtags, patrocinadores fixos"}
+                            value={description} onChange={e => setDescription(e.target.value)}
+                            placeholder={"Descrição do vídeo..."}
                             rows={6}
+                            className="sidebar-textarea"
                             style={{ width:"100%", resize:"vertical", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"8px", padding:"10px 12px", fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", outline:"none", background:"rgba(255,255,255,0.05)", lineHeight:1.7, boxSizing:"border-box", transition:"border-color 0.15s" }}
                             onFocus={e=>e.target.style.borderColor="rgba(255,255,255,0.35)"}
                             onBlur={e=>e.target.style.borderColor="rgba(255,255,255,0.1)"}
                           />
-                          <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.25)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em" }}>Compartilhada entre todos os roteiros</span>
                         </div>
                       </div>
                     </div>
@@ -1621,14 +1592,18 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
                   if (sectionKey === "insercoes") { if (size !== "large") return null;
                     return (
-                    <div key="insercoes">
-                      <SectionHeader label="Inserções" />
-                      {isCollapsed && insercoes.length > 0 && (
-                        <div style={{ fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", padding:"4px 2px 0", marginTop:"-4px" }}>
-                          {insercoes.map(ins => ins.label).join(", ")}
+                    <div key="insercoes" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Inserções
+                        </span>
+                      </button>
+                      {isCollapsed && (
+                        <div style={boxStyle}>
+                          <span style={previewText}>{insercoes.length > 0 ? insercoes.map(ins => ins.label).join(", ") : <span style={{ opacity:0.35 }}>—</span>}</span>
                         </div>
                       )}
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"2px" }}>
                           {insercoes.map(ins => (
                             <div key={ins.id} className="ins-pill"
@@ -1667,9 +1642,22 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                     ); }
 
                   if (sectionKey === "tags") { if (size !== "large") return null; return (
-                    <div key="tags">
-                      <SectionHeader label="Tags" />
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                    <div key="tags" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          Tags
+                        </span>
+                      </button>
+                      {isCollapsed && (
+                        <div style={boxStyle}>
+                          {tags.trim() ? (
+                            <span style={previewText}>{tags.trim()}</span>
+                          ) : (
+                            <div style={previewLine} />
+                          )}
+                        </div>
+                      )}
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"8px" }}>
                           {(() => {
                             const MAX = 500; const remaining = MAX - tags.length;
@@ -1682,6 +1670,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                                 onKeyDown={e=>{ if(e.key==="Enter"){e.preventDefault();if(tags.trim()&&!tags.endsWith(","))setTags(tags+", ");} }}
                                 placeholder="roteiro, produtividade, youtube..."
                                 rows={4}
+                                className="sidebar-textarea"
                                 style={{ width:"100%", resize:"vertical", border:`1px solid ${isOver?"#ef4444":isWarning?"#f59e0b":"rgba(255,255,255,0.1)"}`, borderRadius:"8px", padding:"10px 12px", fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', sans-serif", outline:"none", background:"rgba(255,255,255,0.05)", lineHeight:1.7, boxSizing:"border-box", transition:"border-color 0.15s" }}
                                 onFocus={e=>{ if(!isOver&&!isWarning) e.target.style.borderColor="rgba(255,255,255,0.35)"; }}
                                 onBlur={e=>{ if(!isOver&&!isWarning) e.target.style.borderColor="rgba(255,255,255,0.1)"; }}
@@ -1701,8 +1690,12 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
                   if (sectionKey === "perf") { if (size !== "large") return null; return (
                     <div key="perf">
-                      <SectionHeader label="Performance" icon={perfUnlocked ? null : Lock} />
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "900px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
+                          {(Lock) && <Lock size={10} strokeWidth={2.5} />}Performance
+                        </span>
+                      </button>
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           {!perfUnlocked ? (
                             <div style={{ textAlign:"center", padding:"16px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:"8px" }}>
@@ -1756,11 +1749,10 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:"8px" }}>
                         <button onClick={toggleCollapse} style={{ display:"flex", alignItems:"center", gap:0, background:"none", border:"none", cursor:"pointer", padding:0, flex:1 }}>
                           <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Moodboard</span>
-                          <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.25)", lineHeight:1, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition:"transform 0.2s ease", display:"inline-block", marginLeft:"auto" }}>▾</span>
                         </button>
                         <input ref={moodRef} type="file" accept="image/*" multiple onChange={handleMoodImage} style={{ display:"none" }} />
                       </div>
-                      <div className="sidebar-section-body" style={{ maxHeight: isCollapsed ? "0" : "800px", opacity: isCollapsed ? 0 : 1, overflow: isCollapsed ? "hidden" : "visible" }}>
+                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           {moodboard.length === 0 ? (
                             <div onClick={()=>moodRef.current?.click()}
@@ -2202,18 +2194,83 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 // ─── TIME INPUT ───────────────────────────────────────────────────────────────
 
 function TimeInput({ value, onChange }) {
-  const [h, m] = (value || "00:00").split(":").map(Number);
+  const [text, setText] = useState(value || "00:00");
+  const [open, setOpen] = useState(false);
+  const wrapRef  = useRef(null);
+  const inputRef = useRef(null);
+  const listRef  = useRef(null);
 
-  const setHours   = e => { const n = Math.max(0, Math.min(23, Number(e.target.value))); onChange(`${String(n).padStart(2,"0")}:${String(m).padStart(2,"0")}`); };
-  const setMinutes = e => { const n = Math.max(0, Math.min(59, Number(e.target.value))); onChange(`${String(h).padStart(2,"0")}:${String(n).padStart(2,"0")}`); };
+  // Keep text in sync when value changes externally
+  useEffect(() => { setText(value || "00:00"); }, [value]);
 
-  const numStyle = { fontSize:"11px", fontFamily:"'DM Mono', monospace", fontWeight:600, color:"rgba(255,255,255,0.9)", backgroundColor:"transparent", border:"none", outline:"none", width:"22px", textAlign:"center", padding:0, cursor:"text" };
+  // Build slot list 00:00 → 23:45 in 15min steps
+  const slots = [];
+  for (let h = 0; h < 24; h++)
+    for (let m = 0; m < 60; m += 15)
+      slots.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h, true);
+    return () => document.removeEventListener("mousedown", h, true);
+  }, [open]);
+
+  // Scroll active slot into view when list opens
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const active = listRef.current.querySelector("[data-active='true']");
+    if (active) active.scrollIntoView({ block:"center" });
+  }, [open]);
+
+  const commit = raw => {
+    // Parse typed text — accepts "HH:MM", "H:MM", "HMM", "HHMM"
+    const clean = raw.replace(/[^0-9:]/g, "");
+    let h, m;
+    if (clean.includes(":")) {
+      [h, m] = clean.split(":").map(Number);
+    } else if (clean.length <= 2) {
+      h = Number(clean); m = 0;
+    } else {
+      h = Number(clean.slice(0, -2)); m = Number(clean.slice(-2));
+    }
+    h = isNaN(h) ? 0 : Math.max(0, Math.min(23, h));
+    m = isNaN(m) ? 0 : Math.max(0, Math.min(59, m));
+    const formatted = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    setText(formatted);
+    onChange(formatted);
+  };
+
+  const pick = slot => { setText(slot); onChange(slot); setOpen(false); };
 
   return (
-    <div style={{ padding:"2px 10px", borderRadius:"20px", backgroundColor:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", gap:"1px" }}>
-      <input type="number" min={0} max={23} value={String(h).padStart(2,"0")} onChange={setHours} style={numStyle} />
-      <span style={{ fontSize:"11px", fontWeight:600, color:"rgba(255,255,255,0.5)", fontFamily:"'DM Mono', monospace", lineHeight:1 }}>:</span>
-      <input type="number" min={0} max={59} value={String(m).padStart(2,"0")} onChange={setMinutes} style={numStyle} />
+    <div ref={wrapRef} style={{ position:"relative", display:"inline-block" }}>
+      <input
+        ref={inputRef}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onFocus={e => { e.target.select(); setOpen(true); }}
+        onBlur={e => { commit(e.target.value); }}
+        onKeyDown={e => { if (e.key === "Enter") { commit(e.target.value); setOpen(false); inputRef.current?.blur(); } if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); } }}
+        style={{ background:"transparent", border:"none", outline:"none", color:"rgba(255,255,255,0.85)", fontSize:"12px", fontFamily:"'Inter', sans-serif", fontWeight:500, width:"48px", textAlign:"left", cursor:"text", padding:0 }}
+      />
+      {open && (
+        <div ref={listRef} data-timepicker-dropdown="true" style={{ position:"absolute", top:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", width:"96px", maxHeight:"200px", overflowY:"auto", backgroundColor:"#2d4a2d", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"10px", boxShadow:"0 12px 32px rgba(0,0,0,0.4)", zIndex:100001, scrollbarWidth:"none" }}>
+          <style>{`.time-slot:hover { background: rgba(255,255,255,0.1) !important; }`}</style>
+          {slots.map(slot => {
+            const isActive = slot === text;
+            return (
+              <div key={slot} data-active={isActive}
+                className="time-slot"
+                onMouseDown={e => { e.preventDefault(); pick(slot); }}
+                style={{ padding:"7px 14px", fontSize:"12px", fontFamily:"'DM Mono', monospace", fontWeight: isActive ? 700 : 400, color: isActive ? "#fff" : "rgba(255,255,255,0.75)", backgroundColor: isActive ? "rgba(255,255,255,0.15)" : "transparent", cursor:"pointer", textAlign:"center" }}>
+                {slot}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2252,6 +2309,33 @@ function DropdownSheet({ anchorRef, open, onClose, children, width = 220 }) {
         {children}
       </div>
     </>
+  );
+}
+
+function DeleteButton({ onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  const timerRef = useRef(null);
+
+  const handleClick = () => {
+    if (confirming) {
+      clearTimeout(timerRef.current);
+      onDelete();
+    } else {
+      setConfirming(true);
+      timerRef.current = setTimeout(() => setConfirming(false), 3000);
+    }
+  };
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  return (
+    <button onClick={handleClick}
+      style={{ border:"none", background: confirming ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)", borderRadius:"6px", height:"26px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", transition:"background 0.2s, width 0.25s cubic-bezier(0.4,0,0.2,1)", width: confirming ? "100px" : "26px", padding:0, whiteSpace:"nowrap", flexShrink:0, gap: confirming ? "5px" : "0" }}>
+      <Trash2 size={13} strokeWidth={2} color={confirming ? "#fca5a5" : "rgba(255,255,255,0.6)"} style={{ transition:"color 0.2s", flexShrink:0 }} />
+      <span style={{ fontSize:"11px", fontWeight:600, color:"#fca5a5", fontFamily:"'Inter', sans-serif", opacity: confirming ? 1 : 0, transition:"opacity 0.2s", maxWidth: confirming ? "70px" : "0", overflow:"hidden" }}>
+        Confirmar
+      </span>
+    </button>
   );
 }
 
@@ -2300,7 +2384,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
 
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Postagem</span>
-          <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
+          {onDelete && <DeleteButton onDelete={()=>{ onDelete(); onClose(); }} />}
         </div>
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
@@ -2410,19 +2494,9 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
           </DropdownSheet>
 
         </div>
-        <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
-          {onDelete && (
-            <button onClick={()=>{ onDelete(); onClose(); }}
-              style={{ padding:"9px 13px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center" }}>
-              <Trash2 size={13} strokeWidth={2} />
-            </button>
-          )}
-          <button onClick={onClose}
-            style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>
-            Fechar
-          </button>
+        <div style={{ padding:"0 16px 16px" }}>
           <button onClick={handleSave}
-            style={{ flex:2, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor:saved?"rgba(5,150,105,0.6)":"rgba(255,255,255,0.22)", color:"#fff", fontSize:"13px", fontWeight:700, cursor:"pointer", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
+            style={{ width:"100%", padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor:saved?"rgba(5,150,105,0.6)":"rgba(255,255,255,0.22)", color:"#fff", fontSize:"13px", fontWeight:700, cursor:"pointer", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
             {saved ? "✓ Salvo!" : "Salvar"}
           </button>
         </div>
@@ -2434,7 +2508,7 @@ function PostViewModal({ note, onClose, onSave, onDelete }) {
 
 // ─── MILESTONE EDITOR ─────────────────────────────────────────────────────────
 
-function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
+function NoteQuickModal({ note, onSave, onSaveSilent, onClose, onDelete, onOpenFull }) {
   const STATUS_MAP = useStatusMap();
   const overlayRef = useRef(null);
   const titleRef   = useRef(null);
@@ -2445,23 +2519,20 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
   const [date,    setDate]    = useState(note.date    || todayISO());
   const [pubTime, setPubTime] = useState(note.pubTime || "09:00");
   const [status,  setStatus]  = useState(note.status  || "ideia");
-  const [saved,   setSaved]   = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const statusKeys = Object.keys(STATUS_MAP).filter(k => note.size !== "small" || (k !== "aroll" && k !== "broll"));
+  const save = useCallback((patch) => {
+    const updated = { ...note, title: title.trim(), date, pubTime, status, ...patch };
+    (onSaveSilent || onSave)(updated, note.date);
+  }, [note, title, date, pubTime, status, onSave, onSaveSilent]);
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 80); }, []);
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
   }, [onClose]);
-
-  const handleSave = () => {
-    if (!title.trim()) return;
-    onSave({ ...note, title: title.trim(), date, pubTime, status });
-    setSaved(true); setTimeout(() => { setSaved(false); onClose(); }, 800);
-  };
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -2470,25 +2541,18 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
 
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Roteiro</div>
-          <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
-            <button onClick={onOpenFull}
-              style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", padding:"4px 10px", cursor:"pointer", color:"rgba(255,255,255,0.7)", fontSize:"11px", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}>
-              Abrir editor
-            </button>
-            <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
-          </div>
+          <DeleteButton onDelete={()=>{ onDelete(); onClose(); }} />
         </div>
-        <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
+        <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"11px 13px" }}>
-            <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter" && title.trim()) handleSave(); }}
+            <input ref={titleRef} value={title}
+              onChange={e => { setTitle(e.target.value); save({ title: e.target.value.trim() }); }}
               placeholder="Título do roteiro"
               className="green-input"
               style={{ fontSize:"14px", fontWeight:600, border:"none", outline:"none", color:"#fff", backgroundColor:"transparent", width:"100%", padding:0, caretColor:"#fff", fontFamily:"'Inter', sans-serif" }} />
           </div>
 
-          {/* Properties */}
           <div style={{ display:"flex", flexDirection:"column" }}>
             <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
               <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Status</span>
@@ -2513,7 +2577,7 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
             <div style={{ display:"flex", alignItems:"center", minHeight:"36px" }}>
               <span style={{ width:"100px", flexShrink:0, fontSize:"13px", color:"rgba(255,255,255,0.35)", fontFamily:"'Inter', sans-serif" }}>Horário</span>
               <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>
-                <TimeInput value={pubTime} onChange={setPubTime} />
+                <TimeInput value={pubTime} onChange={v => { setPubTime(v); save({ pubTime: v }); }} />
               </div>
             </div>
           </div>
@@ -2521,7 +2585,7 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
           <DropdownSheet anchorRef={statusAnchorRef} open={statusOpen} onClose={()=>setStatusOpen(false)} width={200}>
             <div style={{ padding:"6px 6px" }}>
               {statusKeys.map(key => { const val = STATUS_MAP[key]; const a = status===key; return (
-                <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); }}
+                <button key={key} onClick={()=>{ setStatus(key); setStatusOpen(false); save({ status: key }); }}
                   style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 12px", borderRadius:"8px", border:"none", background:a?"rgba(255,255,255,0.1)":"transparent", cursor:"pointer", width:"100%", textAlign:"left", fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight:a?700:400 }}>
                   <span style={{ width:"8px", height:"8px", borderRadius:"50%", backgroundColor:val.color, flexShrink:0 }} />
                   {val.label}
@@ -2532,23 +2596,15 @@ function NoteQuickModal({ note, onSave, onClose, onDelete, onOpenFull }) {
           </DropdownSheet>
           <DropdownSheet anchorRef={dateAnchorRef} open={datePickerOpen} onClose={()=>setDatePickerOpen(false)} width={240}>
             <div style={{ padding:"12px 16px 16px" }}>
-              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); }} />
+              <InlineDatePicker value={date} onChange={v=>{ setDate(v); setDatePickerOpen(false); save({ date: v }); }} />
             </div>
           </DropdownSheet>
-
         </div>
+
         <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
-          <button onClick={()=>{ onDelete(); onClose(); }}
-            style={{ padding:"9px 13px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <Trash2 size={13} strokeWidth={2} />
-          </button>
-          <button onClick={onClose}
-            style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>
-            Cancelar
-          </button>
-          <button onClick={handleSave} disabled={!title.trim()}
-            style={{ flex:2, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: saved?"rgba(5,150,105,0.6)":title.trim()?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.06)", color:title.trim()?"#fff":"rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:title.trim()?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
-            {saved ? "✓ Salvo!" : "Salvar"}
+          <button onClick={onOpenFull}
+            style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor:"rgba(255,255,255,0.22)", color:"#fff", fontSize:"13px", fontWeight:700, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>
+            Abrir editor
           </button>
         </div>
 
@@ -2593,7 +2649,7 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
 
         <div style={{ padding:"18px 20px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", flexShrink:0 }}>
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Marco</div>
-          <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
+          {!isNew && <DeleteButton onDelete={()=>{ onDelete(); onClose(); }} />}
         </div>
         <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:"12px" }}>
 
@@ -2626,19 +2682,9 @@ function MilestoneEditor({ milestone, date: initialDate, onSave, onClose, onDele
           </DropdownSheet>
 
         </div>
-        <div style={{ padding:"14px 18px 18px", display:"flex", gap:"8px", flexShrink:0 }}>
-          {!isNew && (
-            <button onClick={()=>{ onDelete(); onClose(); }}
-              style={{ padding:"9px 14px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", fontSize:"13px", fontWeight:600, cursor:"pointer", fontFamily:"'Inter', sans-serif", display:"flex", alignItems:"center", gap:"6px" }}>
-              <Trash2 size={13} strokeWidth={2} />
-            </button>
-          )}
-          <button onClick={onClose}
-            style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>
-            Cancelar
-          </button>
+        <div style={{ padding:"14px 18px 18px", flexShrink:0 }}>
           <button onClick={handleSave} disabled={!title.trim()}
-            style={{ flex:2, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: saved ? "rgba(5,150,105,0.6)" : title.trim() ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)", color: title.trim() ? "#fff" : "rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:title.trim()?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
+            style={{ width:"100%", padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: saved ? "rgba(5,150,105,0.6)" : title.trim() ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)", color: title.trim() ? "#fff" : "rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:title.trim()?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
             {saved ? "✓ Salvo!" : isNew ? "Criar marco" : "Salvar"}
           </button>
         </div>
@@ -3001,7 +3047,7 @@ function MilestoneIconSmall({ icon, category, dimmed }) {
 
 // ─── MILESTONE CHIP ───────────────────────────────────────────────────────────
 
-function MilestoneChip({ milestone, isCurrentMonth, isLoading, onDragStart, onQuickDelete, onContextMenu, onOpen }) {
+function MilestoneChip({ milestone, isCurrentMonth, isLoading, onDragStart, onQuickDelete, onContextMenu, onOpen, active }) {
   const dimmed = !isCurrentMonth;
   return (
     <>
@@ -3009,7 +3055,7 @@ function MilestoneChip({ milestone, isCurrentMonth, isLoading, onDragStart, onQu
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(milestone); }}
       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,milestone);}}
       className={isLoading ? "skeleton-item" : undefined}
-      style={{ display:"flex", alignItems:"center", gap:"4px", backgroundColor:dimmed?"rgba(255,255,255,0.06)":"#5F805E", border:dimmed?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:"5px", padding:"2px 6px", marginBottom:"3px", overflow:"hidden", flexShrink:0, userSelect:"none", cursor:"grab" }}>
+      style={{ display:"flex", alignItems:"center", gap:"4px", backgroundColor:dimmed?"rgba(255,255,255,0.06)":"#5F805E", border:dimmed?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:"5px", padding:"2px 6px", marginBottom:"3px", overflow:"hidden", flexShrink:0, userSelect:"none", cursor:"grab", boxShadow: active ? "0 0 0 2px rgba(255,255,255,0.35), 0 4px 12px rgba(0,0,0,0.3)" : "none" }}>
       <span style={{ fontSize:"10px", fontWeight:dimmed?400:700, color:dimmed?"rgba(255,255,255,0.3)":"#ffffff", fontFamily:"'Inter', sans-serif", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{milestone.title}</span>
       {milestone.value && <span style={{ fontSize:"9px", fontWeight:700, color:dimmed?"rgba(255,255,255,0.25)":"#ffffff", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.8 }}>{formatNumber(milestone.value)}</span>}
     </div>
@@ -3017,35 +3063,126 @@ function MilestoneChip({ milestone, isCurrentMonth, isLoading, onDragStart, onQu
   );
 }
 
+function TimeInputInline({ value, onChange, onClose }) {
+  const [text, setText] = useState(value || "00:00");
+  const inputRef = useRef(null);
+
+  useEffect(() => { setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 50); }, []);
+
+  const commit = raw => {
+    const clean = raw.replace(/[^0-9:]/g, "");
+    let h, m;
+    if (clean.includes(":")) { [h, m] = clean.split(":").map(Number); }
+    else if (clean.length <= 2) { h = Number(clean); m = 0; }
+    else { h = Number(clean.slice(0, -2)); m = Number(clean.slice(-2)); }
+    h = isNaN(h) ? 0 : Math.max(0, Math.min(23, h));
+    m = isNaN(m) ? 0 : Math.max(0, Math.min(59, m));
+    const formatted = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    onChange(formatted);
+  };
+
+  return (
+    <div style={{ padding:"7px 12px" }} onMouseDown={e => e.stopPropagation()}>
+      <input
+        ref={inputRef}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") { commit(text); onClose(); } if (e.key === "Escape") onClose(); }}
+        onBlur={() => { commit(text); onClose(); }}
+        style={{ background:"transparent", border:"none", borderBottom:"1px solid rgba(255,255,255,0.25)", outline:"none", color:"rgba(255,255,255,0.85)", fontSize:"12px", fontFamily:"'Inter', sans-serif", fontWeight:500, width:"60px", padding:"1px 0", caretColor:"#fff" }}
+      />
+    </div>
+  );
+}
+
+// ─── SUB PANEL ────────────────────────────────────────────────────────────────
+// Renders the sidebar panel for both list submenus and date/time pickers
+
+function SubPanel({ menuRef, btnEl, submenuRef, pos, setPos, onMouseEnter, onMouseLeave, menuStyle, item, onClose }) {
+  const ref = submenuRef;
+
+  useEffect(() => {
+    if (!ref.current || !menuRef.current || !btnEl) return;
+    const parentRect = menuRef.current.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+    const sm = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight, M = 8;
+    let left = parentRect.right + 4;
+    if (left + sm.width > vw - M) left = parentRect.left - sm.width - 4;
+    let top = btnRect.top;
+    if (top + sm.height > vh - M) top = vh - M - sm.height;
+    setPos({ top, left, opacity: 1 });
+  });
+
+  const btnBase = s => ({ display:"flex", alignItems:"center", gap:"9px", width:"100%", padding:"7px 10px", border:"none", background:"transparent", textAlign:"left", fontSize:"12px", color: s.danger ? "#fca5a5" : "rgba(255,255,255,0.85)", cursor:"pointer", borderRadius:"7px", fontFamily:"'Inter', sans-serif", fontWeight:500 });
+
+  return (
+    <div ref={ref}
+      onMouseDown={e => e.stopPropagation()}
+      style={{ ...menuStyle, top:pos.top, left:pos.left, opacity:pos.opacity, minWidth: item.panelType ? "0" : "160px", width: item.panelType === "time" ? "fit-content" : undefined, padding: item.panelType ? "0" : "5px" }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}>
+      {item.panelType === "date" && (
+        <div style={{ padding:"12px 10px 14px", width:"220px" }}>
+          <InlineDatePicker
+            value={item.value}
+            onChange={v => { item.onChange(v); onClose(); }}
+          />
+        </div>
+      )}
+      {item.panelType === "time" && (
+        <TimeInputInline value={item.value} onChange={item.onChange} onClose={onClose} />
+      )}
+      {item.submenu && item.submenu.map((s, si) => (
+        <button key={si} onClick={() => { s.action.call(s); onClose(); }}
+          style={{ ...btnBase(s), backgroundColor: s.active ? s.dot + "22" : "transparent", border: s.active ? `1px solid ${s.dot}66` : "1px solid transparent", borderRadius:"7px" }}
+          onMouseEnter={e=>e.currentTarget.style.backgroundColor= s.active ? s.dot + "33" : "rgba(255,255,255,0.1)"}
+          onMouseLeave={e=>e.currentTarget.style.backgroundColor= s.active ? s.dot + "22" : "transparent"}>
+          {s.dot && <span style={{ width:8, height:8, borderRadius:"50%", backgroundColor:s.dot, flexShrink:0 }} />}
+          {s.icon && <s.icon size={13} strokeWidth={2} style={{ flexShrink:0, opacity:0.55 }} />}
+          {s.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
 
-function ContextMenu({ x, y, items, onClose }) {
+function ContextMenu({ rect, items, onClose }) {
   const ref = useRef(null);
-  const [pos, setPos] = useState({ top: y, left: x, opacity: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, opacity: 0 });
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const submenuRef = useRef(null);
   const [submenuPos, setSubmenuPos] = useState({ top:0, left:0, opacity:0 });
   const closeTimer = useRef(null);
 
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || !rect) return;
     const { width, height } = ref.current.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight, MARGIN = 8;
-    const top  = y + height > vh - MARGIN ? Math.max(MARGIN, y - height) : y;
-    const left = x + width  > vw - MARGIN ? Math.max(MARGIN, x - width)  : x;
+    const vw = window.innerWidth, vh = window.innerHeight, M = 8;
+    // Position below the chip, centered on it
+    let top = rect.bottom + 4;
+    if (top + height > vh - M) top = rect.top - height - 4;
+    let left = rect.left + rect.width / 2 - width / 2;
+    if (left + width > vw - M) left = vw - width - M;
+    if (left < M) left = M;
     setPos({ top, left, opacity: 1 });
-  }, [x, y]);
+  }, [rect]);
 
   useEffect(() => {
     const h = e => {
-      if (
-        ref.current && !ref.current.contains(e.target) &&
-        (!submenuRef.current || !submenuRef.current.contains(e.target))
-      ) onClose();
+      if (ref.current && ref.current.contains(e.target)) return;
+      if (submenuRef.current && submenuRef.current.contains(e.target)) return;
+      if (e.target.closest?.("[data-timepicker-dropdown]")) return;
+      onClose();
     };
-    document.addEventListener("mousedown", h);
+    document.addEventListener("mousedown", h, true);
     document.addEventListener("scroll", onClose, true);
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("scroll", onClose, true); };
+    return () => {
+      document.removeEventListener("mousedown", h, true);
+      document.removeEventListener("scroll", onClose, true);
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -3067,23 +3204,19 @@ function ContextMenu({ x, y, items, onClose }) {
   const menuStyle = { position:"fixed", zIndex:99999, backgroundColor:SAGE, border:"1px solid rgba(255,255,255,0.12)", borderRadius:"12px", boxShadow:"0 12px 36px rgba(0,0,0,0.35)", padding:"5px", minWidth:"190px", fontFamily:"'Inter', sans-serif", transition:"opacity 0.05s" };
   const btnBase = (item) => ({ display:"flex", alignItems:"center", gap:"9px", width:"100%", padding:"7px 10px", border:"none", background:"transparent", textAlign:"left", fontSize:"12px", color:item.danger?"#fca5a5":"rgba(255,255,255,0.85)", cursor:"pointer", borderRadius:"7px", fontFamily:"'Inter', sans-serif", fontWeight:500 });
 
-  // Count only non-divider items for index
-  let btnIdx = -1;
-  const realItems = items.filter(i => i !== "divider");
-
   return (
     <>
+      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:99998 }} />
       <div ref={ref} style={{ ...menuStyle, top:pos.top, left:pos.left, opacity:pos.opacity }}>
         {items.map((item, i) => {
           if (item === "divider") return <div key={i} style={{ height:"1px", background:"rgba(255,255,255,0.1)", margin:"4px 0" }} />;
-          btnIdx++;
-          const myIdx = btnIdx;
-          const isOpen = openSubmenu === myIdx;
-          if (item.submenu) {
+
+          if (item.submenu || item.panelType) {
+            const isOpen = openSubmenu?.item === item;
             return (
               <button key={i} data-menu-item
                 style={{ ...btnBase(item), justifyContent:"space-between", backgroundColor: isOpen ? "rgba(255,255,255,0.1)" : "transparent" }}
-                onMouseEnter={e => { clearTimeout(closeTimer.current); e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"; setOpenSubmenu(myIdx); }}
+                onMouseEnter={e => { clearTimeout(closeTimer.current); e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"; setOpenSubmenu({ item, el: e.currentTarget }); }}
                 onMouseLeave={e => { closeTimer.current = setTimeout(() => setOpenSubmenu(null), 150); if (!isOpen) e.currentTarget.style.backgroundColor="transparent"; }}>
                 <span style={{ display:"flex", alignItems:"center", gap:"9px" }}>
                   {item.icon && <item.icon size={13} strokeWidth={2} style={{ flexShrink:0, opacity:0.55 }} />}
@@ -3093,6 +3226,7 @@ function ContextMenu({ x, y, items, onClose }) {
               </button>
             );
           }
+
           return (
             <button key={i} data-menu-item onClick={() => item.action.call(item)}
               style={btnBase(item)}
@@ -3104,32 +3238,27 @@ function ContextMenu({ x, y, items, onClose }) {
           );
         })}
       </div>
-      {openSubmenu !== null && (() => {
-        const sub = realItems[openSubmenu]?.submenu || [];
-        return (
-          <div ref={submenuRef} style={{ ...menuStyle, top:submenuPos.top, left:submenuPos.left, opacity:submenuPos.opacity, minWidth:"160px" }}
-            onMouseEnter={() => clearTimeout(closeTimer.current)}
-            onMouseLeave={() => { closeTimer.current = setTimeout(() => setOpenSubmenu(null), 150); }}>
-            {sub.map((s, si) => (
-              <button key={si} onClick={() => { s.action.call(s); setOpenSubmenu(null); }}
-                style={{ ...btnBase(s) }}
-                onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"}
-                onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
-                {s.dot && <span style={{ width:8, height:8, borderRadius:"50%", backgroundColor:s.dot, flexShrink:0 }} />}
-                {s.icon && <s.icon size={13} strokeWidth={2} style={{ flexShrink:0, opacity:0.55 }} />}
-                {s.label}
-              </button>
-            ))}
-          </div>
-        );
-      })()}
+      {openSubmenu !== null && (
+        <SubPanel
+          menuRef={ref}
+          btnEl={openSubmenu.el}
+          submenuRef={submenuRef}
+          pos={submenuPos}
+          setPos={setSubmenuPos}
+          onMouseEnter={() => clearTimeout(closeTimer.current)}
+          onMouseLeave={() => { closeTimer.current = setTimeout(() => setOpenSubmenu(null), 150); }}
+          menuStyle={menuStyle}
+          item={openSubmenu.item}
+          onClose={onClose}
+        />
+      )}
     </>
   );
 }
 
 // ─── NOTE CHIP ────────────────────────────────────────────────────────────────
 
-function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete, onQuickEditStatus, onQuickEditTitle, onContextMenu, onOpen, selected }) {
+function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete, onQuickEditStatus, onQuickEditTitle, onContextMenu, onOpen, selected, active }) {
   const T = useTheme();
   const STATUS_MAP = useStatusMap();
   const isPost = note.platform === "instagram";
@@ -3141,7 +3270,7 @@ function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete,
 
   // Determine if the event is in the past
   const isPast = note.date < todayISO();
-  const labelOpacity = isPast ? 0.4 : 1;
+  const labelOpacity = isPast && note.status !== "publicado" ? 0.4 : 1;
   return (
     <>
       <div draggable onDragStart={e=>{e.stopPropagation();onDragStart(e,note);}} onDragEnd={()=>{}}
@@ -3149,7 +3278,7 @@ function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete,
         onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,note);}}
         data-note-id={note.id} data-note-date={note.date}
         className={isLoading ? "skeleton-item" : undefined}
-        style={{ backgroundColor: bg, border:`1px solid ${dimmed ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, borderRadius:"6px", padding:"5px 8px", marginBottom:"3px", overflow:"hidden", flexShrink:0, cursor:"grab", userSelect:"none", transition:"opacity 0.15s", outline: selected ? "1px solid rgba(122,184,122,0.4)" : "none" }}
+        style={{ backgroundColor: bg, border:`1px solid ${dimmed ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, borderRadius:"6px", padding:"5px 8px", marginBottom:"3px", overflow:"hidden", flexShrink:0, cursor:"grab", userSelect:"none", transition:"opacity 0.15s", outline: selected ? "1px solid rgba(122,184,122,0.4)" : "none", boxShadow: active ? "0 0 0 2px rgba(255,255,255,0.35), 0 4px 12px rgba(0,0,0,0.3)" : "none" }}
         onMouseEnter={e=>{ if (!selected) e.currentTarget.style.opacity="0.75"; }}
         onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
@@ -3162,6 +3291,43 @@ function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete,
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+// ─── TITLE EDIT POPUP ─────────────────────────────────────────────────────────
+
+function TitleEditPopup({ rect, value, onChange, onClose }) {
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+  const [pos, setPos] = useState({ top:0, left:0, width:0, opacity:0 });
+
+  useEffect(() => {
+    if (!ref.current || !rect) return;
+    const panel = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight, M = 8;
+    const w = Math.max(rect.width, 180);
+    let top = rect.bottom + 4;
+    if (top + panel.height > vh - M) top = rect.top - panel.height - 4;
+    let left = rect.left + rect.width / 2 - w / 2;
+    if (left + w > vw - M) left = vw - w - M;
+    if (left < M) left = M;
+    setPos({ top, left, width: w, opacity: 1 });
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 30);
+  }, [rect]);
+
+  return (
+    <>
+      <div onMouseDown={onClose} style={{ position:"fixed", inset:0, zIndex:99998 }} />
+      <div ref={ref} style={{ position:"fixed", top:pos.top, left:pos.left, width:pos.width, opacity:pos.opacity, zIndex:99999, backgroundColor:SAGE, border:"1px solid rgba(255,255,255,0.14)", borderRadius:"10px", boxShadow:"0 12px 36px rgba(0,0,0,0.35)", padding:"8px 12px", animation:"fadeIn 0.1s ease" }}>
+      <input
+        ref={inputRef}
+        defaultValue={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") onClose(); }}
+        style={{ width:"100%", boxSizing:"border-box", background:"transparent", border:"none", borderBottom:"1px solid rgba(255,255,255,0.25)", outline:"none", color:"#fff", fontSize:"12px", fontWeight:600, fontFamily:"'Inter', sans-serif", caretColor:"#fff", padding:"2px 0" }}
+      />
+    </div>
     </>
   );
 }
@@ -3186,23 +3352,77 @@ function ReminderChipInline({ reminder, isCurrentMonth, onDelete }) {
 
 // ─── MOBILE DAY MODAL ────────────────────────────────────────────────────────
 
-function MobileDayModal({ date, notes, milestones, reminders, today, onClose, onOpenNote, onOpenMilestone, onOpenReminder, onCreateNew }) {
+function MobileDayModal({ date, notes, milestones, reminders, today, onClose, onOpenNote, onOpenMilestone, onOpenReminder, onCreateNew, onAddNote, onAddMilestone, onAddReminder }) {
   const STATUS_MAP = useStatusMap();
   const overlayRef = useRef(null);
   const isToday = date === today;
+  const [creating, setCreating] = useState(null); // "note"|"post"|"reminder"|"milestone"
+  const [title, setTitle] = useState("");
+  const titleRef = useRef(null);
 
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") onClose(); };
+    if (creating) setTimeout(() => titleRef.current?.focus(), 80);
+  }, [creating]);
+
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") { if (creating) { setCreating(null); setTitle(""); } else onClose(); } };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [onClose, creating]);
 
   const [y, m, d] = date.split("-").map(Number);
   const dateLabel = new Date(y, m-1, d).toLocaleDateString("pt-BR", { weekday:"long", day:"numeric", month:"long" });
   const dateCapitalized = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
 
   const hasItems = notes.length > 0 || milestones.length > 0 || reminders.length > 0;
+  const isPast = date < today;
 
-  const createBtnStyle = { flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", backgroundColor:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:"10px", padding:"9px 4px", color:"#fff", fontSize:"10px", fontWeight:600, cursor:"pointer", fontFamily:"'Inter', sans-serif", letterSpacing:"0.02em" };
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    const id = creating === "reminder" ? "r"+Date.now() : generateId();
+    if (creating === "note") {
+      const note = { id, date, title:title.trim(), content:"", size:"large", status:"ideia" };
+      onAddNote(note);
+      setCreating(null); setTitle("");
+      onClose();
+      onOpenNote(note);
+    } else if (creating === "post") {
+      const note = { id, date, title:title.trim(), platform:"instagram", size:"small", status:"agendado", content:"", igCaption:"", igHashtags:[], pubTime:"09:00" };
+      onAddNote(note);
+      setCreating(null); setTitle("");
+      onClose();
+      onOpenNote(note);
+    } else if (creating === "milestone") {
+      const m = { id, date, title:title.trim(), notes:"", category:"outro", value:"", description:"", image:null };
+      onAddMilestone(m);
+      setCreating(null); setTitle("");
+      onClose();
+      onOpenMilestone(m);
+    } else if (creating === "reminder") {
+      const r = { id, date, title:title.trim(), notes:"", time:"09:00" };
+      onAddReminder(r);
+      setCreating(null); setTitle("");
+      onClose();
+      onOpenReminder(r);
+    }
+  };
+
+  const TYPE_OPTIONS = [
+    { key:"note",      label:"Roteiro",  Icon:Youtube,   },
+    { key:"post",      label:"Post",     Icon:Instagram, },
+    { key:"reminder",  label:"Lembrete", Icon:Bell,      },
+    { key:"milestone", label:"Marco",    Icon:Flag,      },
+  ];
+
+  const createBtnStyle = (key) => ({
+    flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:"4px",
+    backgroundColor: creating === key ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.1)",
+    border: creating === key ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(255,255,255,0.18)",
+    borderRadius:"10px", padding:"9px 4px", color: creating === key ? "#fff" : "rgba(255,255,255,0.8)",
+    fontSize:"10px", fontWeight:600, cursor:"pointer", fontFamily:"'Inter', sans-serif", letterSpacing:"0.02em",
+    transition:"all 0.12s",
+  });
+
+  const placeholder = creating === "note" ? "Título do roteiro..." : creating === "post" ? "Título do post..." : creating === "milestone" ? "Nome do marco..." : "Título do lembrete...";
 
   return (
     <div ref={overlayRef} onClick={e=>e.target===overlayRef.current&&onClose()}
@@ -3219,26 +3439,37 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
             <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
           </div>
 
-          {/* Create section */}
+          {/* Type buttons */}
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"8px" }}>Criar novo</div>
           <div style={{ display:"flex", gap:"8px" }}>
-            <button onClick={()=>{ onCreateNew("note"); onClose(); }} style={createBtnStyle}>
-              <Youtube size={15} color="#ffffff" strokeWidth={2} />
-              Roteiro
-            </button>
-            <button onClick={()=>{ onCreateNew("post"); onClose(); }} style={createBtnStyle}>
-              <Instagram size={15} color="#ffffff" strokeWidth={2} />
-              Post
-            </button>
-            <button onClick={()=>{ onCreateNew("reminder"); onClose(); }} style={createBtnStyle}>
-              <Bell size={15} color="#ffffff" strokeWidth={2} />
-              Lembrete
-            </button>
-            <button onClick={()=>{ onCreateNew("milestone"); onClose(); }} style={createBtnStyle}>
-              <Flag size={15} color="#ffffff" strokeWidth={2} />
-              Marco
-            </button>
+            {TYPE_OPTIONS.map(({ key, label, Icon }) => (
+              <button key={key} onClick={() => { setCreating(creating === key ? null : key); setTitle(""); }} style={createBtnStyle(key)}>
+                <Icon size={15} color={creating === key ? "#ffffff" : "rgba(255,255,255,0.7)"} strokeWidth={2} />
+                {label}
+              </button>
+            ))}
           </div>
+
+          {/* Inline create form */}
+          {creating && (
+            <div style={{ marginTop:"10px", animation:"slideDown 0.18s ease" }}>
+              <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
+                <input
+                  ref={titleRef}
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && title.trim()) handleCreate(); }}
+                  placeholder={placeholder}
+                  className="green-input"
+                  style={{ flex:1, fontSize:"13px", fontWeight:500, border:"none", borderBottom:"1px solid rgba(255,255,255,0.25)", outline:"none", color:"#fff", backgroundColor:"transparent", padding:"6px 0", caretColor:"#fff", fontFamily:"'Inter', sans-serif" }}
+                />
+                <button onClick={handleCreate} disabled={!title.trim()}
+                  style={{ flexShrink:0, padding:"6px 14px", borderRadius:"8px", border:"none", backgroundColor: title.trim() ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.07)", color: title.trim() ? "#fff" : "rgba(255,255,255,0.25)", fontSize:"12px", fontWeight:700, cursor: title.trim() ? "pointer" : "default", fontFamily:"'Inter', sans-serif", transition:"all 0.15s" }}>
+                  Criar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Items list */}
@@ -3254,7 +3485,6 @@ function MobileDayModal({ date, notes, milestones, reminders, today, onClose, on
           {notes.map(n => {
             const isPost = n.platform === "instagram";
             const st = isPost ? (POST_STATUSES[n.status] || POST_STATUSES.ideia) : (STATUS_MAP[n.status] || STATUS_MAP.ideia);
-            const isPast = date < today;
             return (
               <div key={n.id} onClick={()=>{ onOpenNote(n); onClose(); }}
                 style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 14px", backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"12px", marginBottom:"8px", cursor:"pointer" }}
@@ -3339,7 +3569,7 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
 
         <div style={{ padding:"16px 18px 13px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:"rgba(87,119,87,0.3)", backdropFilter:"blur(12px)", borderRadius:"16px 16px 0 0" }}>
           <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>Editar lembrete</div>
-          <button onClick={onClose} style={{ border:"none", background:"rgba(255,255,255,0.1)", borderRadius:"6px", width:"26px", height:"26px", cursor:"pointer", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.6)" }}>×</button>
+          <DeleteButton onDelete={()=>{ onDelete(reminder); onClose(); }} />
         </div>
         <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:"10px" }}>
 
@@ -3388,17 +3618,9 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
           </DropdownSheet>
 
         </div>
-        <div style={{ padding:"0 16px 16px", display:"flex", gap:"8px" }}>
-          <button onClick={()=>{ onDelete(reminder); onClose(); }}
-            style={{ padding:"9px 13px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.15)", backgroundColor:"rgba(0,0,0,0.13)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <Trash2 size={13} strokeWidth={2} />
-          </button>
-          <button onClick={onClose}
-            style={{ flex:1, padding:"9px 0", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.6)", fontSize:"13px", fontWeight:500, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>
-            Cancelar
-          </button>
+        <div style={{ padding:"0 16px 16px" }}>
           <button onClick={handleSave} disabled={!title.trim()}
-            style={{ flex:2, padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: saved?"rgba(5,150,105,0.6)":title.trim()?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.06)", color:title.trim()?"#fff":"rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:title.trim()?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
+            style={{ width:"100%", padding:"9px 0", borderRadius:"8px", border:"none", backgroundColor: saved?"rgba(5,150,105,0.6)":title.trim()?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.06)", color:title.trim()?"#fff":"rgba(255,255,255,0.25)", fontSize:"13px", fontWeight:700, cursor:title.trim()?"pointer":"default", fontFamily:"'Inter', sans-serif", transition:"all 0.2s" }}>
             {saved ? "✓ Salvo!" : "Salvar"}
           </button>
         </div>
@@ -3408,7 +3630,7 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
   );
 }
 
-function ReminderBadge({ reminder, isCurrentMonth, isLoading, date, today, onDelete, onDragStart, onContextMenu, onOpen }) {
+function ReminderBadge({ reminder, isCurrentMonth, isLoading, date, today, onDelete, onDragStart, onContextMenu, onOpen, active }) {
   const dimmed = !isCurrentMonth;
   const isPast = date < today;
   return (
@@ -3416,7 +3638,7 @@ function ReminderBadge({ reminder, isCurrentMonth, isLoading, date, today, onDel
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(reminder); }}
       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,reminder);}}
       className={isLoading ? "skeleton-item" : undefined}
-      style={{ display:"inline-flex", flexDirection:"column", gap:"1px", backgroundColor: dimmed ? "rgba(255,255,255,0.06)" : "#FEF9F4", border: dimmed ? "1px solid rgba(255,255,255,0.08)" : "1px solid #79A679", borderRadius:"5px", padding:"3px 6px", marginBottom:"2px", userSelect:"none", flexShrink:0, cursor:"grab", overflow:"hidden" }}>
+      style={{ display:"inline-flex", flexDirection:"column", gap:"1px", backgroundColor: dimmed ? "rgba(255,255,255,0.06)" : "#FEF9F4", border: dimmed ? "1px solid rgba(255,255,255,0.08)" : "1px solid #79A679", borderRadius:"5px", padding:"3px 6px", marginBottom:"2px", userSelect:"none", flexShrink:0, cursor:"grab", overflow:"hidden", boxShadow: active ? "0 0 0 2px rgba(255,255,255,0.35), 0 4px 12px rgba(0,0,0,0.3)" : "none" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"4px" }}>
         <span style={{ fontSize:"10px", fontWeight: dimmed?400:700, color: dimmed?"rgba(255,255,255,0.3)":"#79A679", fontFamily:"'Inter', sans-serif", whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.3", flex:1 }}>{reminder.title}</span>
       </div>
@@ -3469,7 +3691,7 @@ function ReminderAddForm({ date, onAdd, onClose }) {
   );
 }
 
-function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones, reminders, today, isLoading, revealClass, revealDelay, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
+function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones, reminders, today, isLoading, revealClass, revealDelay, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, onQuickEditDate, onQuickEditReminder, selectedIds }) {
   const STATUS_MAP = useStatusMap();
   const T = useTheme();
   const { date, day, isCurrentMonth } = cellData;
@@ -3478,11 +3700,12 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
   const [isDragOver, setIsDragOver] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [ctxMenu, setCtxMenu] = useState(null);
+  const [titleEdit, setTitleEdit] = useState(null); // { rect, item, value }
   const dragCounter = useRef(0);
-  const handleNoteCtx = (e, note) => setCtxMenu({ x:e.clientX, y:e.clientY, type:"note", item:note });
-  const handleMilestoneCtx = (e, m) => setCtxMenu({ x:e.clientX, y:e.clientY, type:"milestone", item:m });
-  const handleReminderCtx = (e, r) => setCtxMenu({ x:e.clientX, y:e.clientY, type:"reminder", item:r });
-  const handleDayCtx = e => { e.preventDefault(); setCtxMenu({ x:e.clientX, y:e.clientY, type:"day" }); };
+  const handleNoteCtx = (e, note) => { const r = e.currentTarget.getBoundingClientRect(); setCtxMenu({ rect:r, type:"note", item:note }); };
+  const handleMilestoneCtx = (e, m) => { const r = e.currentTarget.getBoundingClientRect(); setCtxMenu({ rect:r, type:"milestone", item:m }); };
+  const handleReminderCtx = (e, r) => { const rect = e.currentTarget.getBoundingClientRect(); setCtxMenu({ rect, type:"reminder", item:r }); };
+  const handleDayCtx = e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setCtxMenu({ rect:r, type:"day" }); };
 
   const handleDragEnter = e => { e.preventDefault(); dragCounter.current+=1; if(dragCounter.current===1) setIsDragOver(true); };
   const handleDragOver  = e => { e.preventDefault(); e.dataTransfer.dropEffect="move"; };
@@ -3548,16 +3771,16 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
         )
       ) : (
         <>
-          <div style={{ display:"flex", flexDirection:"column" }}>{sortedNotes.map(n => <NoteChip key={n.id} note={n} onDragStart={onDragStart} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onQuickDelete={onQuickDeleteNote} onQuickEditStatus={onQuickEditStatus} onQuickEditTitle={onQuickEditTitle} onContextMenu={handleNoteCtx} onOpen={onOpenNote} selected={selectedIds&&selectedIds.has(n.id)} />)}</div>
+          <div style={{ display:"flex", flexDirection:"column" }}>{sortedNotes.map(n => <NoteChip key={n.id} note={n} onDragStart={onDragStart} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onQuickDelete={onQuickDeleteNote} onQuickEditStatus={onQuickEditStatus} onQuickEditTitle={onQuickEditTitle} onContextMenu={handleNoteCtx} onOpen={onOpenNote} selected={selectedIds&&selectedIds.has(n.id)} active={ctxMenu?.item?.id === n.id} />)}</div>
           {milestones.length > 0 && (
             <div style={{ marginTop:sortedNotes.length > 0 ? "16px" : "0px", display:"flex", flexDirection:"column" }}>
-              {milestones.map(m => <MilestoneChip key={m.id} milestone={m} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onDragStart={onMilestoneDragStart} onQuickDelete={onQuickDeleteMilestone} onContextMenu={handleMilestoneCtx} onOpen={onOpenMilestone} />)}
+              {milestones.map(m => <MilestoneChip key={m.id} milestone={m} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onDragStart={onMilestoneDragStart} onQuickDelete={onQuickDeleteMilestone} onContextMenu={handleMilestoneCtx} onOpen={onOpenMilestone} active={ctxMenu?.item?.id === m.id} />)}
             </div>
           )}
           {reminders.length > 0 && (
             <div style={{ marginTop:(sortedNotes.length > 0 || milestones.length > 0) ? "4px" : "0px", display:"flex", flexDirection:"column", gap:"2px" }}>
               {[...reminders].sort((a,b)=>a.time.localeCompare(b.time)).map(r => (
-                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} isLoading={isLoading} date={cellData.date} today={today} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} />
+                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} isLoading={isLoading} date={cellData.date} today={today} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} active={ctxMenu?.item?.id === r.id} />
               ))}
             </div>
           )}
@@ -3570,34 +3793,69 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
       )}
     </div>
     {ctxMenu && ctxMenu.type === "day" && (
-      <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={()=>setCtxMenu(null)} items={[
-        { icon:FilePlus,  label:"Novo roteiro",   action:()=>{ onOpenWithAction(date,"note");      setCtxMenu(null); } },
-        { icon:Flag,      label:"Novo marco",     action:()=>{ onOpenWithAction(date,"milestone"); setCtxMenu(null); } },
-        { icon:Bell,      label:"Novo lembrete",  action:()=>{ onOpenWithAction(date,"reminder");  setCtxMenu(null); } },
+      <ContextMenu rect={ctxMenu.rect} onClose={()=>setCtxMenu(null)} items={[
+        { icon:FilePlus,  label:"Novo roteiro",    action:()=>{ onOpenWithAction(date,"note");      setCtxMenu(null); } },
+        { icon:Instagram, label:"Nova postagem",   action:()=>{ onOpenWithAction(date,"post");      setCtxMenu(null); } },
+        { icon:Flag,      label:"Novo marco",      action:()=>{ onOpenWithAction(date,"milestone"); setCtxMenu(null); } },
+        { icon:Bell,      label:"Novo lembrete",   action:()=>{ onOpenWithAction(date,"reminder");  setCtxMenu(null); } },
       ]} />
     )}
-    {ctxMenu && ctxMenu.type === "note" && (
-      <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={()=>setCtxMenu(null)} items={[
-        { icon:Pencil, label:"Editar título", item:ctxMenu.item, action(){ onQuickEditTitle(this.item); setCtxMenu(null); } },
-        { icon:BarChart2, label:"Alterar status", submenu:
+    {ctxMenu && ctxMenu.type === "note" && (() => {
+      const isPost = ctxMenu.item.platform === "instagram";
+      return (
+      <ContextMenu rect={ctxMenu.rect} onClose={()=>setCtxMenu(null)} items={[
+        { icon:Pencil, label:"Editar título", item:ctxMenu.item, action(){ setTitleEdit({ rect: ctxMenu.rect, item: ctxMenu.item, value: ctxMenu.item.title }); setCtxMenu(null); } },
+        ...(!isPost ? [{ icon:BarChart2, label:"Alterar status", submenu:
             Object.entries(STATUS_MAP).map(([key,val]) => ({
-              label: val.label, dot: val.color, item: ctxMenu.item,
+              label: val.label, dot: val.color, active: ctxMenu.item.status === key, item: ctxMenu.item,
               action(){ onQuickEditStatus(this.item, key); setCtxMenu(null); }
             }))
+        }] : []),
+        { icon:Clock, label:"Editar data", panelType:"date", value: ctxMenu.item.date,
+          onChange: v => { onQuickEditDate(ctxMenu.item, v); setCtxMenu(null); }
+        },
+        { icon:Bell, label:"Editar horário", panelType:"time", value: ctxMenu.item.pubTime || "09:00",
+          onChange: v => { onQuickEditDate({ ...ctxMenu.item, pubTime: v }, ctxMenu.item.date); }
         },
         "divider",
-        { icon:Trash2, label:"Apagar roteiro", item:ctxMenu.item, action(){ onQuickDeleteNote(this.item); setCtxMenu(null); }, danger:true },
+        { icon:Trash2, label: isPost ? "Apagar postagem" : "Apagar roteiro", item:ctxMenu.item, action(){ onQuickDeleteNote(this.item); setCtxMenu(null); }, danger:true },
       ]} />
-    )}
+      );
+    })()}
     {ctxMenu && ctxMenu.type === "milestone" && (
-      <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={()=>setCtxMenu(null)} items={[
+      <ContextMenu rect={ctxMenu.rect} onClose={()=>setCtxMenu(null)} items={[
+        { icon:Pencil, label:"Editar título", item:ctxMenu.item, action(){ setTitleEdit({ rect: ctxMenu.rect, item: ctxMenu.item, value: ctxMenu.item.title, kind:"milestone" }); setCtxMenu(null); } },
+        { icon:Clock, label:"Editar data", panelType:"date", value: ctxMenu.item.date,
+          onChange: v => { onQuickEditDate(ctxMenu.item, v, "milestone"); setCtxMenu(null); }
+        },
+        "divider",
         { icon:Trash2, label:"Apagar marco", item:ctxMenu.item, action(){ onQuickDeleteMilestone(this.item); setCtxMenu(null); }, danger:true },
       ]} />
     )}
     {ctxMenu && ctxMenu.type === "reminder" && (
-      <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={()=>setCtxMenu(null)} items={[
+      <ContextMenu rect={ctxMenu.rect} onClose={()=>setCtxMenu(null)} items={[
+        { icon:Pencil, label:"Editar título", item:ctxMenu.item, action(){ setTitleEdit({ rect: ctxMenu.rect, item: ctxMenu.item, value: ctxMenu.item.title, kind:"reminder" }); setCtxMenu(null); } },
+        { icon:Clock, label:"Editar data", panelType:"date", value: ctxMenu.item.date,
+          onChange: v => { onQuickEditReminder(ctxMenu.item, { date: v }); setCtxMenu(null); }
+        },
+        { icon:Bell, label:"Editar horário", panelType:"time", value: ctxMenu.item.time,
+          onChange: v => { onQuickEditReminder(ctxMenu.item, { time: v }); }
+        },
+        "divider",
         { icon:Trash2, label:"Apagar lembrete", item:ctxMenu.item, action(){ onDeleteReminder(this.item); setCtxMenu(null); }, danger:true },
       ]} />
+    )}
+    {titleEdit && (
+      <TitleEditPopup
+        rect={titleEdit.rect}
+        value={titleEdit.value}
+        onChange={v => {
+          if (titleEdit.kind === "milestone") onQuickEditDate({ ...titleEdit.item, title: v }, titleEdit.item.date, "milestone");
+          else if (titleEdit.kind === "reminder") onQuickEditReminder(titleEdit.item, { title: v });
+          else onQuickEditTitle(titleEdit.item, v);
+        }}
+        onClose={() => setTitleEdit(null)}
+      />
     )}
     </>
   );
@@ -4096,6 +4354,19 @@ export default function CalendarNotes() {
   const handleQuickEditStatus = useCallback((note,newStatus) => dispatch({ type:"UPDATE_NOTE", note:{...note,status:newStatus}, oldDate:note.date }), []);
   const handleQuickEditTitle  = useCallback((note,newTitle) => dispatch({ type:"UPDATE_NOTE", note:{...note,title:newTitle}, oldDate:note.date }), []);
   const handleQuickDeleteMilestone = useCallback(m => dispatch({ type:"DELETE_MILESTONE", id:m.id, date:m.date }), []);
+  const handleQuickEditDate = useCallback((item, newDate, kind) => {
+    if (kind === "milestone") {
+      dispatch({ type:"DELETE_MILESTONE", id:item.id, date:item.date });
+      dispatch({ type:"ADD_MILESTONE", milestone:{ ...item, date:newDate } });
+    } else {
+      dispatch({ type:"UPDATE_NOTE", note:{ ...item, date:newDate }, oldDate:item.date });
+    }
+  }, []);
+  const handleQuickEditReminder = useCallback((reminder, patch) => {
+    const updated = { ...reminder, ...patch };
+    dispatch({ type:"DELETE_REMINDER", id:reminder.id, date:reminder.date });
+    dispatch({ type:"ADD_REMINDER", reminder:updated });
+  }, []);
   const handleAddReminder    = useCallback(r => dispatch({ type:"ADD_REMINDER", reminder:r }), []);
   const handleDeleteReminder = useCallback(r => dispatch({ type:"DELETE_REMINDER", id:r.id, date:r.date }), []);
   const reminderDragRef = useRef(null);
@@ -4221,8 +4492,8 @@ export default function CalendarNotes() {
         .sidebar-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; transition: background 0.3s; }
         .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: #4B654B; }
         @keyframes sidebarEnter { from { transform: translateX(-100%) } to { transform: translateX(0) } }
-        @keyframes slideDown { from { max-height: 0; opacity: 0 } to { max-height: 600px; opacity: 1 } }
-        .sidebar-section-body { overflow: hidden; transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease; }
+        @keyframes slideDown { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:translateY(0) } }
+        .sidebar-section-body { transition: opacity 1s ease, visibility 1s ease, max-height 1s ease; }
         .calendar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.3s; }
         .calendar-scroll:hover { scrollbar-color: #4B654B transparent; }
         .calendar-scroll::-webkit-scrollbar { width: 4px; }
@@ -4247,6 +4518,7 @@ export default function CalendarNotes() {
         [contenteditable]:focus { outline: none; }
         textarea { font-family: 'Inter', sans-serif; }
         .green-input::placeholder { color: rgba(255,255,255,0.35); }
+        .sidebar-textarea::placeholder { color: rgba(255,255,255,0.3); }
         input[type="time"].green-time::-webkit-calendar-picker-indicator { display: none; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
@@ -4413,13 +4685,13 @@ export default function CalendarNotes() {
             const revealDelay = isLoading ? undefined : `${row * 0.12}s`;
             return (
               <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today} isLoading={isLoading} revealClass={isLoading ? undefined : "reveal-row"} revealDelay={revealDelay}
-                onOpen={date => setQuickCreate({date,type:"note"})} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
+                onOpen={date => setMobileDayModal({ date })} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
                       if (note.platform === "instagram") {
                         setOpenEditor({ type:"post", item:note });
                       } else {
                         setOpenEditor({ type:"note", item:note });
                       }
-                    }} onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})} onOpenReminder={r=>setOpenReminder(r)} onDragStart={handleDragStart} onDrop={handleDrop} onMilestoneDragStart={handleMilestoneDragStart} onMilestoneDrop={handleMilestoneDrop} onReminderDragStart={handleReminderDragStart} onReminderDrop={handleReminderDrop} onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)} onQuickEditStatus={handleQuickEditStatus} onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}} onQuickDeleteMilestone={handleQuickDeleteMilestone} onAddReminder={handleAddReminder} onDeleteReminder={handleDeleteReminder} selectedIds={selectedIds} />
+                    }} onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})} onOpenReminder={r=>setOpenReminder(r)} onDragStart={handleDragStart} onDrop={handleDrop} onMilestoneDragStart={handleMilestoneDragStart} onMilestoneDrop={handleMilestoneDrop} onReminderDragStart={handleReminderDragStart} onReminderDrop={handleReminderDrop} onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)} onQuickEditStatus={handleQuickEditStatus} onQuickEditTitle={handleQuickEditTitle} onQuickDeleteMilestone={handleQuickDeleteMilestone} onAddReminder={handleAddReminder} onDeleteReminder={handleDeleteReminder} onQuickEditDate={handleQuickEditDate} onQuickEditReminder={handleQuickEditReminder} selectedIds={selectedIds} />
             );
           })}
           </div>
@@ -4472,7 +4744,9 @@ export default function CalendarNotes() {
           onOpenNote={note=>{ setMobileDayModal(null); if(note.platform==="instagram") setOpenEditor({type:"post",item:note}); else setOpenEditor({type:"note-full",item:note}); }}
           onOpenMilestone={m=>{ setMobileDayModal(null); setOpenEditor({type:"milestone",item:m}); }}
           onOpenReminder={r=>{ setMobileDayModal(null); setOpenReminder(r); }}
-          onCreateNew={type=>{ setMobileDayModal(null); setQuickCreate({date:mobileDayModal.date,type: type==="post" ? "note" : type}); if(type==="post") setTimeout(()=>setQuickCreate({date:mobileDayModal.date,type:"note",platform:"instagram"}),0); }}
+          onAddNote={handleAddNote}
+          onAddMilestone={handleAddMilestone}
+          onAddReminder={handleAddReminder}
         />
       )}
       {quickCreate && (
@@ -4492,7 +4766,8 @@ export default function CalendarNotes() {
 
       {openEditor?.type === "note" && (
           <NoteQuickModal note={openEditor.item}
-            onSave={(fields) => { handleUpdateNote({...openEditor.item,...fields}, openEditor.item.date); setOpenEditor(null); }}
+            onSave={(fields, oldDate) => { handleUpdateNote({...openEditor.item,...fields}, oldDate ?? openEditor.item.date); setOpenEditor(null); }}
+            onSaveSilent={(fields, oldDate) => { handleUpdateNote({...openEditor.item,...fields}, oldDate ?? openEditor.item.date); }}
             onClose={()=>setOpenEditor(null)}
             onDelete={()=>{ handleSoftDeleteNote(openEditor.item.id, openEditor.item.date); setOpenEditor(null); }}
             onOpenFull={()=>setOpenEditor({ type:"note-full", item:openEditor.item })}
@@ -4532,20 +4807,8 @@ export default function CalendarNotes() {
         />
       )}
 
-      {quickEditNote && (
-        <div style={{ position:"fixed", inset:0, zIndex:5000, backgroundColor:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setQuickEditNote(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{ backgroundColor:"#fff", borderRadius:"14px", padding:"24px", width:"420px", boxShadow:"0 20px 50px rgba(0,0,0,0.2)", animation:"slideUp 0.2s ease" }}>
-            <div style={{ fontSize:"13px", fontWeight:700, color:T.textFaint, fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"12px" }}>Editar título</div>
-            <input autoFocus value={quickEditNewTitle} onChange={e=>setQuickEditNewTitle(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter"){handleQuickEditTitle(quickEditNote,quickEditNewTitle);setQuickEditNote(null);} if(e.key==="Escape")setQuickEditNote(null); }}
-              style={{ width:"100%", border:"1px solid #ddd0bc", borderRadius:"8px", padding:"10px 12px", fontSize:"16px", fontWeight:600, fontFamily:"'Inter', sans-serif", outline:"none", color:"#1e293b", boxSizing:"border-box" }} />
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"14px" }}>
-              <button onClick={()=>setQuickEditNote(null)} style={{ padding:"7px 16px", borderRadius:"8px", border:"1px solid #ddd0bc", backgroundColor:"transparent", color:"#8a7060", fontSize:"13px", cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>Cancelar</button>
-              <button onClick={()=>{handleQuickEditTitle(quickEditNote,quickEditNewTitle);setQuickEditNote(null);}} style={{ padding:"7px 16px", borderRadius:"8px", border:"none", backgroundColor:SAGE, color:"#fff", fontSize:"13px", fontWeight:600, cursor:"pointer", fontFamily:"'Inter', sans-serif" }}>Salvar</button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
 
       {showTrash && (
         <div style={{ position:"fixed", inset:0, zIndex:4000, backgroundColor:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"20px", animation:"fadeIn 0.15s ease" }} onClick={()=>setShowTrash(false)}>
