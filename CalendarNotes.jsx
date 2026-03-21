@@ -518,7 +518,6 @@ async function supaLoad() {
 async function supaSave(state) {
   try {
     const payload = { data: JSON.stringify(state) };
-    // Try PATCH first (triggers Realtime UPDATE event)
     const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state?id=eq.${SUPA_ROW}`, {
       method: "PATCH",
       headers: {
@@ -530,10 +529,8 @@ async function supaSave(state) {
       body: JSON.stringify(payload),
     });
     const body = await res.json().catch(() => []);
-    console.log("[supaSave] PATCH status:", res.status, "rows:", Array.isArray(body) ? body.length : body);
-    // If no rows updated, insert
+    console.log("[supaSave] PATCH", res.status, JSON.stringify(body).slice(0, 200));
     if (!Array.isArray(body) || body.length === 0) {
-      console.log("[supaSave] inserting new row...");
       const res2 = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
         method: "POST",
         headers: {
@@ -544,7 +541,8 @@ async function supaSave(state) {
         },
         body: JSON.stringify({ id: SUPA_ROW, ...payload }),
       });
-      console.log("[supaSave] INSERT status:", res2.status);
+      const body2 = await res2.json().catch(() => null);
+      console.log("[supaSave] POST", res2.status, JSON.stringify(body2).slice(0, 200));
     }
   } catch(e) { console.error("[supaSave] error:", e); }
 }
