@@ -517,16 +517,30 @@ async function supaLoad() {
 
 async function supaSave(state) {
   try {
-    await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
-      method: "POST",
+    // First try PATCH (UPDATE) — triggers Realtime postgres_changes
+    const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state?id=eq.${SUPA_ROW}`, {
+      method: "PATCH",
       headers: {
         apikey: SUPA_KEY,
         Authorization: `Bearer ${SUPA_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates",
+        Prefer: "return=minimal",
       },
-      body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state), tab_id: TAB_ID }),
+      body: JSON.stringify({ data: JSON.stringify(state), tab_id: TAB_ID }),
     });
+    // If row doesn't exist yet (0 rows updated), insert it
+    if (res.status === 404 || res.headers.get("content-range") === "*/0") {
+      await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
+        method: "POST",
+        headers: {
+          apikey: SUPA_KEY,
+          Authorization: `Bearer ${SUPA_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates",
+        },
+        body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state), tab_id: TAB_ID }),
+      });
+    }
   } catch(e) {}
 }
 
@@ -541,14 +555,18 @@ function supaSubscribe(onRemoteChange) {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      // Join the postgres_changes channel for our table
       ws.send(JSON.stringify({
-        topic: "realtime:public:calendar_state",
+        topic: "realtime:calendar_sync",
         event: "phx_join",
-        payload: { config: { broadcast: { self: false }, presence: { key: "" }, postgres_changes: [{ event: "UPDATE", schema: "public", table: "calendar_state", filter: `id=eq.${SUPA_ROW}` }] } },
+        payload: {
+          config: {
+            broadcast: { self: false },
+            presence: { key: "" },
+            postgres_changes: [{ event: "UPDATE", schema: "public", table: "calendar_state", filter: `id=eq.${SUPA_ROW}` }]
+          }
+        },
         ref: "1"
       }));
-      // Heartbeat every 25s to keep connection alive
       heartbeat = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: "hb" }));
       }, 25000);
@@ -1543,7 +1561,9 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
               {/* Tab switcher in topbar */}
               <div style={{ display:"flex", position:"relative", backgroundColor:"rgba(0,0,0,0.2)", borderRadius:"10px", padding:"3px" }}>
                 <div style={{ position:"absolute", top:"3px", bottom:"3px", width:"76px", borderRadius:"7px", backgroundColor:"rgba(255,255,255,0.18)", transition:"transform 0.2s cubic-bezier(0.4,0,0.2,1)", transform: editorTab === "roteiro" ? "translateX(0)" : "translateX(76px)", pointerEvents:"none" }} />
-                {[{key:"roteiro", label:"Roteiro"},{key:"broll", label:"B-roll"}].map(({key,label}) => (
+  
+
+              {[{key:"roteiro", label:"Roteiro"},{key:"broll", label:"B-roll"}].map(({key,label}) => (
                   <button key={key} onClick={()=>setEditorTab(key)}
                     style={{ position:"relative", zIndex:1, width:"76px", padding:"5px 0", borderRadius:"7px", border:"none", cursor:"pointer", fontSize:"12px", fontWeight:600, fontFamily:"'Inter', sans-serif", background:"transparent", transition:"color 0.2s", textAlign:"center", color: editorTab===key ? "#fff" : "rgba(255,255,255,0.4)" }}>
                     {label}
@@ -4350,9 +4370,23 @@ export default function CalendarNotes() {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch(e) {}
     });
 
+    // Polling fallback every 30s — catches missed realtime events
+    const pollInterval = setInterval(() => {
+      if (importLock.current || document.hidden) return;
+      supaLoad().then(remote => {
+        if (!remote) return;
+        const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
+        if ((remote._savedAt || 0) > localTs && remote.tab_id !== TAB_ID) {
+          dispatch({type:"HYDRATE", state: remote});
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch(e) {}
+        }
+      });
+    }, 30000);
+
     return () => {
       window.removeEventListener("focus", onFocus);
       unsubscribe();
+      clearInterval(pollInterval);
     };
   }, []);
 
@@ -5018,6 +5052,17 @@ Responda APENAS com o JSON, sem texto adicional.`;
 
               <div style={{ height:"1px", backgroundColor:"rgba(255,255,255,0.08)", margin:"6px 4px" }} />
 
+
+              <label style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", borderRadius:"9px", border:"none", background:"none", cursor:"pointer", width:"100%", textAlign:"left", color:"rgba(255,255,255,0.8)", fontFamily:"'Inter', sans-serif", fontSize:"13px", fontWeight:500, transition:"background 0.12s" }}
+                onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.1)"}
+                onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                <span style={{ color:"rgba(255,255,255,0.45)", display:"flex", alignItems:"center", flexShrink:0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </span>
+                Importar dados
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const parsed=JSON.parse(ev.target.result); if(parsed&&parsed.notes&&parsed.milestones){ const newState={reminders:{},...parsed,statuses:mergeStatuses(parsed.statuses),_savedAt:Date.now()}; importLock.current=true; dispatch({type:"HYDRATE",state:newState}); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); }catch(e){} supaSave(newState).then(()=>{ setSavedIndicator(true); importLock.current=false; }); setShowMenu(false); }else{alert("Arquivo inválido.");} }catch{alert("Erro ao ler o arquivo.");} }; reader.readAsText(file); e.target.value=""; }} />
+              </label>
+
               {[
                 { label:"Exportar dados", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
                   onClick: ()=>{ setShowMenu(false); const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`calendario-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } },
@@ -5033,7 +5078,6 @@ Responda APENAS com o JSON, sem texto adicional.`;
                 </button>
               ))}
 
-              <div style={{ flex:1 }} />
               <div style={{ height:"1px", backgroundColor:"rgba(255,255,255,0.1)", margin:"8px 4px" }} />
 
 
