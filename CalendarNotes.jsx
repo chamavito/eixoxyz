@@ -517,7 +517,8 @@ async function supaLoad() {
 
 async function supaSave(state) {
   try {
-    // First try PATCH (UPDATE) — triggers Realtime postgres_changes
+    const payload = { data: JSON.stringify(state) };
+    // Try PATCH first (triggers Realtime UPDATE event)
     const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state?id=eq.${SUPA_ROW}`, {
       method: "PATCH",
       headers: {
@@ -526,13 +527,13 @@ async function supaSave(state) {
         "Content-Type": "application/json",
         Prefer: "return=representation",
       },
-      body: JSON.stringify({ data: JSON.stringify(state), tab_id: TAB_ID }),
+      body: JSON.stringify(payload),
     });
-    const body = await res.json().catch(() => null);
-    console.log("[supaSave] PATCH status:", res.status, "rows updated:", Array.isArray(body) ? body.length : body);
+    const body = await res.json().catch(() => []);
+    console.log("[supaSave] PATCH status:", res.status, "rows:", Array.isArray(body) ? body.length : body);
     // If no rows updated, insert
     if (!Array.isArray(body) || body.length === 0) {
-      console.log("[supaSave] No rows updated, inserting...");
+      console.log("[supaSave] inserting new row...");
       const res2 = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
         method: "POST",
         headers: {
@@ -541,10 +542,9 @@ async function supaSave(state) {
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates,return=representation",
         },
-        body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state), tab_id: TAB_ID }),
+        body: JSON.stringify({ id: SUPA_ROW, ...payload }),
       });
-      const body2 = await res2.json().catch(() => null);
-      console.log("[supaSave] INSERT status:", res2.status, body2);
+      console.log("[supaSave] INSERT status:", res2.status);
     }
   } catch(e) { console.error("[supaSave] error:", e); }
 }
@@ -584,12 +584,14 @@ function supaSubscribe(onRemoteChange) {
         if (msg.event !== "heartbeat") console.log("[supaSubscribe] msg:", msg.event, msg.topic, msg.payload?.status);
         if (msg.event === "postgres_changes" && msg.payload?.data?.record) {
           const record = msg.payload.data.record;
-          // Ignore changes we made ourselves
-          if (record.tab_id === TAB_ID) return;
           const raw = record.data;
           if (!raw) return;
           const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-          if (parsed?.notes && parsed?.milestones) onRemoteChange({ reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) });
+          if (!parsed?.notes || !parsed?.milestones) return;
+          // Ignore if this is our own save (same _savedAt stored locally)
+          const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
+          if (parsed._savedAt && parsed._savedAt === localTs) return;
+          onRemoteChange({ reminders:{}, ...parsed, statuses: mergeStatuses(parsed.statuses) });
         }
       } catch(e) {}
     };
