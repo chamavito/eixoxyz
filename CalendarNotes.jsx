@@ -120,6 +120,111 @@ function statusesToMap(statuses) {
 }
 const StatusMapContext = createContext(statusesToMap(DEFAULT_STATUSES));
 function useStatusMap() { return useContext(StatusMapContext); }
+
+
+function useGoogleCalendarSync() {
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+
+  const buildEvent = (item, type) => {
+    const date = item.date;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const hasTime = type === "reminder" ? !!item.time : !!item.pubTime;
+    let summary, description;
+    if (type === "note" || type === "post") {
+      summary = item.title || "Sem título";
+      description = [item.status ? `Status: ${item.status}` : null, item.propPatrocinador ? `Patrocinador: ${item.propPatrocinador}` : null, item.description || null].filter(Boolean).join("\n");
+    } else if (type === "milestone") {
+      summary = `🏆 ${item.title || "Marco"}`; description = "";
+    } else {
+      summary = `🔔 ${item.title || "Lembrete"}`; description = item.notes || "";
+    }
+    let start, end;
+    if (hasTime) {
+      const time = type === "reminder" ? item.time : item.pubTime;
+      const [h, m] = (time || "09:00").split(":").map(Number);
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const startDt = new Date(`${date}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
+      const endDt = new Date(startDt.getTime() + 60 * 60 * 1000);
+      start = { dateTime: startDt.toISOString(), timeZone: tz };
+      end   = { dateTime: endDt.toISOString(),   timeZone: tz };
+    } else {
+      const nextDay = new Date(date + "T00:00:00");
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nd = nextDay.toISOString().split("T")[0];
+      start = { date }; end = { date: nd };
+    }
+    return { summary, description, start, end };
+  };
+
+  const callGCal = async (item, type, onUpdate) => {
+    const event = buildEvent(item, type);
+    if (!event) return;
+    const action = item.gcalEventId
+      ? `Update Google Calendar event with id "${item.gcalEventId}" using this data: ${JSON.stringify(event)}. Reply with just the event id.`
+      : `Create a new Google Calendar event with this data: ${JSON.stringify(event)}. Reply with just the event id.`;
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6", max_tokens: 200,
+        messages: [{ role: "user", content: action }],
+        mcp_servers: [{ type: "url", url: "https://gcal.mcp.claude.com/mcp", name: "gcal" }]
+      })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
+    const idMatch = text.match(/[a-zA-Z0-9_]{15,}/);
+    if (idMatch && idMatch[0] !== item.gcalEventId) onUpdate(item, type, { gcalEventId: idMatch[0] });
+  };
+
+  const syncOne = async (item, type, onUpdate) => {
+    setSyncing(true); setSyncResult(null);
+    try { await callGCal(item, type, onUpdate); setSyncResult({ ok: true, count: 1 }); }
+    catch (e) { setSyncResult({ ok: false, error: e.message }); }
+    finally { setSyncing(false); }
+  };
+
+  const syncAll = async (state, onUpdate) => {
+    setSyncing(true); setSyncResult(null);
+    const items = [
+      ...Object.values(state.notes || {}).flat().filter(n => !n.deleted && n.date).map(n => ({ item: n, type: n.platform === "instagram" ? "post" : "note" })),
+      ...Object.values(state.milestones || {}).flat().filter(m => m.date).map(m => ({ item: m, type: "milestone" })),
+      ...Object.values(state.reminders || {}).flat().filter(r => r.date).map(r => ({ item: r, type: "reminder" })),
+    ];
+    let count = 0;
+    try {
+      for (const { item, type } of items) { await callGCal(item, type, onUpdate); count++; }
+      setSyncResult({ ok: true, count });
+    } catch (e) { setSyncResult({ ok: false, error: e.message }); }
+    finally { setSyncing(false); }
+  };
+
+  return { syncing, syncResult, syncOne, syncAll };
+}
+
+function useOnlineStatus() {
+  const [status, setStatus] = useState("online");
+  useEffect(() => {
+    const update = () => setStatus(navigator.onLine ? "online" : "offline");
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    update();
+    // Detect slow connection via Network Information API if available
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      const checkSpeed = () => {
+        const slow = conn.effectiveType === "slow-2g" || conn.effectiveType === "2g" || conn.downlink < 0.5;
+        setStatus(navigator.onLine ? (slow ? "slow" : "online") : "offline");
+      };
+      conn.addEventListener("change", checkSpeed);
+      checkSpeed();
+      return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); conn.removeEventListener("change", checkSpeed); };
+    }
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+  return status;
+}
 function useIsMobile() {
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
@@ -542,7 +647,7 @@ function buildSampleState() {
 
 // ─── RICH TEXT EDITOR ─────────────────────────────────────────────────────────
 
-function RichEditor({ value, onChange, title, isMobile }) {
+function RichEditor({ value, onChange, title, isMobile, stats }) {
   const editorRef   = useRef(null);
   const focusRef    = useRef(null);
   const initialized = useRef(false);
@@ -649,7 +754,7 @@ function RichEditor({ value, onChange, title, isMobile }) {
     <>
 
       <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
-        <Toolbar targetRef={editorRef} isFocus={false} colorMode={colorMode} visible={isEditing} />
+        <Toolbar targetRef={editorRef} isFocus={false} colorMode={colorMode} visible={isMobile ? isEditing : true} />
         <div style={{ flex:1, overflowY: isMobile ? "visible" : "auto", backgroundColor:"#fdf9f4" }}>
           <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={() => sync(editorRef.current)}
             onFocus={() => { clearTimeout(toolbarHideTimer.current); setIsEditing(true); }}
@@ -659,6 +764,13 @@ function RichEditor({ value, onChange, title, isMobile }) {
             style={{ maxWidth:"680px", margin:"0 auto", minHeight: isMobile ? "50vh" : "100%", padding: isMobile ? "28px 24px 48px" : "48px 24px 64px", fontSize:"15px", lineHeight:"1.9", color:CAMERA_COLOR, fontFamily:"'Inter', sans-serif", outline:"none", caretColor:CAMERA_COLOR, boxSizing:"border-box", width:"100%" }}
           />
         </div>
+        {!isMobile && stats && (
+          <div style={{ flexShrink:0, borderTop:"1px solid #d4e4d4", backgroundColor:"#faf6ef", padding:"7px 20px", display:"flex", gap:"20px", alignItems:"center" }}>
+            <span style={{ fontSize:"11px", fontFamily:"'DM Mono', monospace", color:"#8a9e8a" }}><span style={{ fontWeight:600, color:"#4a6b4a" }}>{stats.words.toLocaleString("pt-BR")}</span> palavras</span>
+            <span style={{ fontSize:"11px", fontFamily:"'DM Mono', monospace", color:"#8a9e8a" }}><span style={{ fontWeight:600, color:"#4a6b4a" }}>{stats.chars.toLocaleString("pt-BR")}</span> caracteres</span>
+            <span style={{ fontSize:"11px", fontFamily:"'DM Mono', monospace", color:"#8a9e8a" }}>~<span style={{ fontWeight:600, color:"#4a6b4a" }}>{Math.max(1, Math.round(stats.words / 173))}</span> min de leitura</span>
+          </div>
+        )}
       </div>
       {focusMode && (
         <div style={{ position:"fixed", inset:0, zIndex:9000, backgroundColor:"#1a2218", display:"flex", flexDirection:"column", animation:"fadeIn 0.2s ease" }}>
@@ -1291,6 +1403,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   const [status, setStatus]         = useState(note?.status      || "ideia");
   const [noteDate, setNoteDate]     = useState(note?.date        || initialDate);
   const [saved, setSaved]           = useState(false);
+  const onlineStatus = useOnlineStatus();
   const [dateError, setDateError]   = useState("");
   const [moodboard, setMoodboard]   = useState(note?.moodboard   || []);
   const [titleB, setTitleB]         = useState(note?.titleB       || "");
@@ -1309,7 +1422,7 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
   const addBrollItem    = (cat) => {
     const id = generateId();
-    setBroll(p => ({ ...p, [cat]: [...p[cat], { id, text:"", done: false }] }));
+    setBroll(p => ({ ...p, [cat]: [{ id, text:"", done: false }, ...p[cat]] }));
     setTimeout(() => brollInputRefs.current[id]?.focus(), 30);
   };
   const updateBrollItem = (cat, id, patch) => setBroll(p => ({ ...p, [cat]: p[cat].map(i => i.id===id ? {...i,...patch} : i) }));
@@ -1341,7 +1454,6 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
   useEffect(() => { if (size === "small" && (status === "aroll" || status === "broll")) setStatus("ideia"); }, [size]);
   const [sidebarOrder, setSidebarOrder] = useState(["titulos","data","status","descricao","tags","moodboard"]);
   const [sidebarHidden, setSidebarHidden] = useState({ moodboard: true, insercoes: true, perf: true });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState({});
   const [description, setDescription] = useState(note?.description || "");
   const moodRef = useRef(null);
   const stats     = countStats(content);
@@ -1453,37 +1565,17 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                 {sidebarOrder.map((sectionKey, idx) => {
                   const labelMap = { titulos:"Títulos alt.", titulo:"Título", data:"Data de publicação", status:"Status", descricao:"Descrição", insercoes:"Inserções", tags:"Tags", perf:"Performance", moodboard:"Moodboard" };
 
-                  const isCollapsed = !!sidebarCollapsed[sectionKey];
-                  const toggleCollapse = () => setSidebarCollapsed(p => ({ ...p, [sectionKey]: !p[sectionKey] }));
-
                   // Skip sections toggled off
                   if (sidebarHidden[sectionKey]) return null;
-
-                  const boxStyle = { backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" };
-                  const previewText = { fontSize:"13px", fontWeight:500, color:"rgba(255,255,255,0.7)", fontFamily:"'Inter', sans-serif", lineHeight:1.4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" };
-                  const previewLine = { borderBottom:"1px solid rgba(255,255,255,0.1)", height:"1px", margin:"6px 0" };
-
 
                   if (sectionKey === "titulos") {
                     const hasMany = (titleB.trim() || titleC.trim()) && size === "large";
                     const winA = titleWinner === "A", winB = titleWinner === "B", winC = titleWinner === "C";
                     const previewTitle = titleWinner === "B" ? titleB : titleWinner === "C" ? titleC : title;
                     return (
-                      <div key="titulos" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                        <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Títulos alternativos
-                        </span>
-                      </button>
-                        {isCollapsed && (
-                          <div style={boxStyle}>
-                            <span style={{ ...previewText }}>
-                              {titleWinner && <Star size={9} strokeWidth={0} fill="#f5c842" style={{ marginRight:"5px", verticalAlign:"middle", display:"inline" }} />}
-                              {previewTitle || <span style={{ opacity:0.35 }}>—</span>}
-                            </span>
-                          </div>
-                        )}
-                        <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                      <div key="titulos">
+                        <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Títulos alternativos</div>
+                        <div>
                           <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", display:"flex", flexDirection:"column", gap:"8px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                             <TitleField lbl="A" val={title} set={setTitle} ph="Título principal..." win={winA} dim={hasMany && titleWinner && !winA} hasMany={hasMany} onToggleWinner={() => setTitleWinner(winA ? null : "A")} />
                             {size === "large" && (<>
@@ -1505,18 +1597,9 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                       return raw.charAt(0).toUpperCase() + raw.slice(1);
                     })();
                     return (
-                    <div key="data" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Data de publicação
-                        </span>
-                      </button>
-                      {isCollapsed && (
-                        <div style={boxStyle}>
-                          <span style={previewText}>{datePreview || <span style={{ opacity:0.35 }}>—</span>}</span>
-                        </div>
-                      )}
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                    <div key="data">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Data de publicação</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           <InlineDatePicker value={noteDate} onChange={v=>{setNoteDate(v);setDateError("");}} />
                           {dateError && <span style={{ fontSize:"10px", color:"#fca5a5", fontFamily:"'DM Mono', monospace", marginTop:"6px", display:"block" }}>{dateError}</span>}
@@ -1526,21 +1609,22 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                     );
                   }
 
-                  if (sectionKey === "status") return (
-                    <div key="status" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Status
-                        </span>
-                      </button>
-                      {isCollapsed && (
-                        <div style={boxStyle}>
-                          <span style={{ ...previewText, color: STATUS_MAP[status]?.color || "rgba(255,255,255,0.7)" }}>
-                            {STATUS_MAP[status]?.label || "—"}
-                          </span>
-                        </div>
-                      )}
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                  if (sectionKey === "status") return ([
+                    <div key="patrocinador">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Patrocinador</div>
+                      <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", border:"1px solid rgba(255,255,255,0.08)" }}>
+                        <input
+                          value={propPatrocinador}
+                          onChange={e => setPropPatrocinador(e.target.value)}
+                          placeholder="—"
+                          className="green-input"
+                          style={{ width:"100%", background:"none", border:"none", outline:"none", fontSize:"13px", fontWeight:600, color:"rgba(255,255,255,0.75)", fontFamily:"'Inter', sans-serif", padding:0, caretColor:"#fff" }}
+                        />
+                      </div>
+                    </div>,
+                    <div key="status">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Status</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", display:"flex", flexDirection:"column", gap:"5px", marginBottom:"2px" }}>
                           {Object.entries(STATUS_MAP).filter(([key]) => size === "large" || (key !== "aroll" && key !== "broll")).map(([key, val]) => {
                             const a = status === key;
@@ -1556,25 +1640,12 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                         </div>
                       </div>
                     </div>
-                  );
+                  ]);
 
                   if (sectionKey === "descricao") return (
-                    <div key="descricao" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Descrição
-                        </span>
-                      </button>
-                      {isCollapsed && (
-                        <div style={boxStyle}>
-                          {description.trim() ? (
-                            <span style={previewText}>{description.trim()}</span>
-                          ) : (
-                            <div style={previewLine} />
-                          )}
-                        </div>
-                      )}
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                    <div key="descricao">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Descrição</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"8px" }}>
                           <textarea
                             value={description} onChange={e => setDescription(e.target.value)}
@@ -1592,18 +1663,9 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
                   if (sectionKey === "insercoes") { if (size !== "large") return null;
                     return (
-                    <div key="insercoes" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Inserções
-                        </span>
-                      </button>
-                      {isCollapsed && (
-                        <div style={boxStyle}>
-                          <span style={previewText}>{insercoes.length > 0 ? insercoes.map(ins => ins.label).join(", ") : <span style={{ opacity:0.35 }}>—</span>}</span>
-                        </div>
-                      )}
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                    <div key="insercoes">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Inserções</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"2px" }}>
                           {insercoes.map(ins => (
                             <div key={ins.id} className="ins-pill"
@@ -1642,22 +1704,9 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                     ); }
 
                   if (sectionKey === "tags") { if (size !== "large") return null; return (
-                    <div key="tags" onClick={isCollapsed ? toggleCollapse : undefined} style={{ cursor: isCollapsed ? "pointer" : "default" }}>
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          Tags
-                        </span>
-                      </button>
-                      {isCollapsed && (
-                        <div style={boxStyle}>
-                          {tags.trim() ? (
-                            <span style={previewText}>{tags.trim()}</span>
-                          ) : (
-                            <div style={previewLine} />
-                          )}
-                        </div>
-                      )}
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                    <div key="tags">
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Tags</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px", display:"flex", flexDirection:"column", gap:"8px" }}>
                           {(() => {
                             const MAX = 500; const remaining = MAX - tags.length;
@@ -1690,12 +1739,8 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
                   if (sectionKey === "perf") { if (size !== "large") return null; return (
                     <div key="perf">
-                      <button onClick={e => { e.stopPropagation(); toggleCollapse(); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"0 0 8px", marginBottom:0 }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:"5px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>
-                          {(Lock) && <Lock size={10} strokeWidth={2.5} />}Performance
-                        </span>
-                      </button>
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                      <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"\'DM Mono\', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>{(Lock) && <Lock size={10} strokeWidth={2.5} />}Performance</div>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"12px 14px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           {!perfUnlocked ? (
                             <div style={{ textAlign:"center", padding:"16px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:"8px" }}>
@@ -1747,12 +1792,12 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                   if (sectionKey === "moodboard") return (
                     <div key="moodboard">
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:"8px" }}>
-                        <button onClick={toggleCollapse} style={{ display:"flex", alignItems:"center", gap:0, background:"none", border:"none", cursor:"pointer", padding:0, flex:1 }}>
+                        <div style={{ display:"flex", alignItems:"center", flex:1 }}>
                           <span style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Moodboard</span>
-                        </button>
+                        </div>
                         <input ref={moodRef} type="file" accept="image/*" multiple onChange={handleMoodImage} style={{ display:"none" }} />
                       </div>
-                      <div className="sidebar-section-body" style={{ opacity: isCollapsed ? 0 : 1, visibility: isCollapsed ? "hidden" : "visible", maxHeight: isCollapsed ? "0" : "600px", transition: "opacity 1s ease, visibility 1s ease, max-height 1s ease", pointerEvents: isCollapsed ? "none" : "auto" }}>
+                      <div>
                         <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px", border:"1px solid rgba(255,255,255,0.08)", marginBottom:"2px" }}>
                           {moodboard.length === 0 ? (
                             <div onClick={()=>moodRef.current?.click()}
@@ -1786,6 +1831,17 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
                   return null;
                 })}
+                {!isMobile && (
+                  <div>
+                    <div style={{ padding:"0 0 8px", fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.35)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.12em" }}>Sincronização</div>
+                    <div style={{ backgroundColor:"rgba(0,0,0,0.13)", borderRadius:"10px", padding:"10px 14px", border:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", gap:"8px" }}>
+                      <div style={{ width:"6px", height:"6px", borderRadius:"50%", flexShrink:0, backgroundColor: onlineStatus === "offline" ? "#ef4444" : onlineStatus === "slow" ? "#f59e0b" : saved ? "#34d399" : "rgba(255,255,255,0.2)", transition:"background-color 0.5s ease" }} />
+                      <span style={{ fontSize:"13px", fontWeight:600, fontFamily:"'Inter', sans-serif", color:"rgba(255,255,255,0.75)" }}>
+                        {onlineStatus === "offline" ? "Sem conexão" : onlineStatus === "slow" ? "Internet instável" : saved ? "Salvando" : "Online"}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
           </div>
@@ -1816,14 +1872,13 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
             </div>
             )}
             <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-              {saved && !isMobile && <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.4)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}>✓ salvo</span>}
               {!isMobile && <button onClick={()=>setEditorMenuOpen(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.55)" }}
                 onMouseEnter={e=>e.currentTarget.style.color="#fff"}
                 onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.55)"}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
               </button>}
             </div>
-          </div>
+        </div>
         <div style={{ flex: isMobile ? "none" : 1, display:"flex", flexDirection:"column", minHeight: isMobile ? "auto" : 0 }}>
 
         {/* Mobile Notion-style header — title + properties */}
@@ -1976,37 +2031,24 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
 
         {editorTab === "roteiro" && (
         <div style={{ flex: isMobile ? "none" : 1, display:"flex", flexDirection:"column", backgroundColor:"#fdf9f4", minHeight: isMobile ? "60vh" : 0, overflow:"hidden", borderRadius:"16px", boxShadow:"0 8px 40px rgba(0,0,0,0.2)" }}>
-          <RichEditor value={content} onChange={setContent} title={title} isMobile={isMobile} />
+          <RichEditor value={content} onChange={setContent} title={title} isMobile={isMobile} stats={stats} />
         </div>
         )}
 
         {editorTab === "broll" && (
         <div style={{ flex:1, overflowY:"auto", borderRadius:"16px", backgroundColor:"#fdf9f4", boxShadow:"0 8px 40px rgba(0,0,0,0.2)", padding:"28px 32px", display:"flex", flexDirection:"column", gap:"28px" }}>
 
-          {(anyDone || Object.values(broll).some(i=>i.length>0)) && (
-            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"-16px" }}>
-              <button onClick={toggleAllBroll}
-                style={{ background:"none", border:"1px solid #e0d5c5", borderRadius:"6px", padding:"3px 12px", fontSize:"10px", color:"#a08060", cursor:"pointer", fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase" }}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor="#8a7060";e.currentTarget.style.color="#6a5040";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor="#e0d5c5";e.currentTarget.style.color="#a08060";}}>
-                {allDone ? "Desmarcar todos" : "Marcar todos"}
-              </button>
-            </div>
-          )}
           {BROLL_CATS.map(({key, label}) => (
             <div key={key}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
-                <span style={{ fontSize:"10px", fontWeight:700, color:"#8a7060", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>{label}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" }}>
                 <button onClick={()=>addBrollItem(key)}
-                  style={{ background:"none", border:"1px dashed #c0aa90", borderRadius:"6px", padding:"2px 10px", fontSize:"11px", color:"#a08060", cursor:"pointer", fontFamily:"'DM Mono', monospace", letterSpacing:"0.04em" }}
+                  style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"18px", height:"18px", background:"none", border:"1px dashed #c0aa90", borderRadius:"4px", fontSize:"14px", color:"#a08060", cursor:"pointer", flexShrink:0, padding:0, lineHeight:1, fontFamily:"monospace" }}
                   onMouseEnter={e=>{e.currentTarget.style.borderColor="#8a7060";e.currentTarget.style.color="#6a5040";}}
                   onMouseLeave={e=>{e.currentTarget.style.borderColor="#c0aa90";e.currentTarget.style.color="#a08060";}}>
-                  + Adicionar
+                  +
                 </button>
+                <span style={{ fontSize:"10px", fontWeight:700, color:"#8a7060", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em" }}>{label}</span>
               </div>
-              {broll[key].length === 0 && (
-                <div style={{ fontSize:"12px", color:"#c0aa90", fontFamily:"'Inter', sans-serif", fontStyle:"italic", padding:"8px 0" }}>Nenhum item ainda</div>
-              )}
               <div style={{ display:"flex", flexDirection:"column", gap:"2px" }}>
                 {broll[key].map((item, itemIdx) => {
                   const isDragging = brollDragging?.cat === key && brollDragging?.id === item.id;
@@ -2058,11 +2100,11 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                           setBrollDragOver(null);
                         }}
                         className="broll-item"
-                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"5px 6px", borderRadius:"7px", transition:"opacity 0.15s", opacity: isDragging ? 0.35 : 1, cursor:"grab" }}
+                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"5px 6px", marginLeft:"-14px", paddingLeft:"15px", borderRadius:"7px", transition:"opacity 0.15s", opacity: isDragging ? 0.35 : 1, cursor:"grab", position:"relative" }}
                         onMouseEnter={e=>{ if(!isDragging) e.currentTarget.style.backgroundColor="rgba(0,0,0,0.04)"; }}
                         onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
 
-                        <svg width="10" height="14" viewBox="0 0 10 14" fill="none" style={{ flexShrink:0, opacity:0.25, cursor:"grab" }}>
+                        <svg width="10" height="14" viewBox="0 0 10 14" fill="none" className="broll-drag-handle" style={{ position:"absolute", left:"-14px", top:"50%", transform:"translateY(-50%)", opacity:0, cursor:"grab", transition:"opacity 0.15s" }}>
                           <circle cx="2.5" cy="2.5" r="1.5" fill="#8a7060"/>
                           <circle cx="7.5" cy="2.5" r="1.5" fill="#8a7060"/>
                           <circle cx="2.5" cy="7" r="1.5" fill="#8a7060"/>
@@ -2078,8 +2120,19 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                           ref={el => { if (el) brollInputRefs.current[item.id] = el; }}
                           value={item.text}
                           onChange={e=>updateBrollItem(key, item.id, {text:e.target.value})}
-                          onKeyDown={e=>{ if (e.key === "Enter") { e.preventDefault(); addBrollItem(key); } }}
+                          onKeyDown={e=>{ 
+                            if (e.key === "Enter") { e.preventDefault(); addBrollItem(key); }
+                            if ((e.key === "Backspace" || e.key === "Delete") && item.text === "") {
+                              e.preventDefault();
+                              const items = broll[key];
+                              const idx = items.findIndex(i => i.id === item.id);
+                              const prevId = items[idx - 1]?.id;
+                              deleteBrollItem(key, item.id);
+                              if (prevId) setTimeout(() => { const el = brollInputRefs.current[prevId]; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 20);
+                            }
+                          }}
                           placeholder="Descreva o plano..."
+                          className="broll-input"
                           style={{ flex:1, border:"none", outline:"none", background:"transparent", fontSize:"14px", lineHeight:"1.85", fontFamily:"'Inter', sans-serif", color: item.done ? "#b0a090" : CAMERA_COLOR, textDecoration: item.done ? "line-through" : "none", transition:"color 0.15s", cursor:"text" }} />
                         <button className="broll-del" onClick={()=>deleteBrollItem(key, item.id)}
                           style={{ background:"none", border:"none", cursor:"pointer", color:"#c0aa90", fontSize:"14px", opacity:0, transition:"opacity 0.15s", padding:"0 2px", lineHeight:1 }}>×</button>
@@ -2094,6 +2147,16 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
               </div>
             </div>
           ))}
+          {(anyDone || Object.values(broll).some(i=>i.length>0)) && (
+            <div style={{ marginTop:"auto", paddingTop:"8px" }}>
+              <button onClick={toggleAllBroll}
+                style={{ background:"none", border:"1px solid #e0d5c5", borderRadius:"6px", padding:"3px 12px", fontSize:"10px", color:"#a08060", cursor:"pointer", fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase" }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="#8a7060";e.currentTarget.style.color="#6a5040";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="#e0d5c5";e.currentTarget.style.color="#a08060";}}>
+                {allDone ? "Desmarcar todos" : "Marcar todos"}
+              </button>
+            </div>
+          )}
         </div>
         )}
 
@@ -2108,24 +2171,6 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
             style={{ position:"absolute", top: isMobile ? "56px" : "60px", right:"12px", width:"230px", borderRadius:"12px", backgroundColor:SAGE, border:"1px solid rgba(255,255,255,0.12)", boxShadow:"0 12px 40px rgba(0,0,0,0.45)", overflow:"hidden", animation:"slideUp 0.18s ease" }}>
 
             {/* Header */}
-            {/* Stats block */}
-            {editorTab === "roteiro" && (
-              <div style={{ padding:"12px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", flexDirection:"column", gap:"6px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>palavras</span>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.words.toLocaleString("pt-BR")}</span>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>caracteres</span>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.chars.toLocaleString("pt-BR")}</span>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>tempo de leitura</span>
-                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>~{Math.max(1, Math.round(stats.words / 173))} min</span>
-                </div>
-              </div>
-            )}
-
             {/* Items */}
             <div style={{ padding:"5px 5px 5px" }}>
               {[
@@ -2181,6 +2226,22 @@ function NoteEditor({ note, date: initialDate, onSave, onSaveSilent, onClose, on
                 </button>
               ))}
             </div>
+            {editorTab === "roteiro" && isMobile && (
+              <div style={{ padding:"12px 14px", borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", flexDirection:"column", gap:"6px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>palavras</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.words.toLocaleString("pt-BR")}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>caracteres</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{stats.chars.toLocaleString("pt-BR")}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontFamily:"'DM Mono', monospace" }}>tempo de leitura</span>
+                  <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.85)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>~{Math.max(1, Math.round(stats.words / 173))} min</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4377,6 +4438,72 @@ export default function CalendarNotes() {
   const [showMenu, setShowMenu]   = useState(false);
   const [savedIndicator, setSavedIndicator] = useState(false);
   useEffect(() => { if(savedIndicator) { const t = setTimeout(()=>setSavedIndicator(false), 1800); return ()=>clearTimeout(t); } }, [savedIndicator]);
+  const [gcalSyncing, setGcalSyncing] = useState(false);
+  const [gcalStatus, setGcalStatus]   = useState(null); // null | "ok" | "error"
+  const [gcalEventIds, setGcalEventIds] = useState(() => { try { return JSON.parse(localStorage.getItem("gcalEventIds") || "{}"); } catch(e) { return {}; } });
+
+  const syncToGoogleCalendar = async () => {
+    setGcalSyncing(true);
+    setGcalStatus(null);
+    try {
+      // Collect all items
+      const allNotes = Object.values(state.notes || {}).flat().filter(n => !n.deleted && n.date);
+      const allMilestones = Object.values(state.milestones || {}).flat().filter(m => m.date);
+      const allReminders = Object.values(state.reminders || {}).flat().filter(r => r.date);
+
+      const items = [
+        ...allNotes.map(n => ({ id: n.id, type: n.platform === "instagram" ? "post" : "note", title: n.title, date: n.date, time: n.pubTime || null, description: [n.description, n.propPatrocinador ? `Patrocinador: ${n.propPatrocinador}` : null, `Status: ${n.status || "ideia"}`].filter(Boolean).join("\n") })),
+        ...allMilestones.map(m => ({ id: m.id, type: "milestone", title: m.title, date: m.date, time: null, description: "" })),
+        ...allReminders.map(r => ({ id: r.id, type: "reminder", title: r.title, date: r.date, time: r.allDay ? null : (r.time || null), description: r.notes || "" })),
+      ];
+
+      const existingIds = gcalEventIds;
+      const prompt = `Sincronize estes itens com o Google Agenda. Para cada item:
+- Se gcalId existir: atualize o evento existente
+- Se não existir: crie um novo evento
+- Evento all-day se time=null, senso use o horário
+- Use o calendário padrão ("primary")
+- Após criar/atualizar, retorne um JSON com { results: [ { id: "<item_id>", gcalId: "<google_event_id>" } ] }
+
+Itens:
+${JSON.stringify(items, null, 2)}
+
+IDs já existentes (item_id -> gcalId):
+${JSON.stringify(existingIds, null, 2)}
+
+Responda APENAS com o JSON, sem texto adicional.`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4096,
+          mcp_servers: [{ type: "url", url: "https://gcal.mcp.claude.com/mcp", name: "google-calendar" }],
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      const data = await response.json();
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+
+      if (parsed?.results) {
+        const newIds = { ...existingIds };
+        parsed.results.forEach(r => { if (r.gcalId) newIds[r.id] = r.gcalId; });
+        setGcalEventIds(newIds);
+        try { localStorage.setItem("gcalEventIds", JSON.stringify(newIds)); } catch(e) {}
+        setGcalStatus("ok");
+        setTimeout(() => setGcalStatus(null), 3000);
+      }
+    } catch(e) {
+      console.error("GCal sync error:", e);
+      setGcalStatus("error");
+      setTimeout(() => setGcalStatus(null), 4000);
+    }
+    setGcalSyncing(false);
+  };
   const [quickEditNote, setQuickEditNote] = useState(null);
   const [quickEditNewTitle, setQuickEditNewTitle] = useState("");
 
@@ -4476,6 +4603,7 @@ export default function CalendarNotes() {
         }
         @keyframes fadeIn       { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp      { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+        @keyframes spin         { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes editorEnter  { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes plusPop      { from { opacity: 0; transform: scale(0.6) } to { opacity: 0.85; transform: scale(1) } }
         @keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }
@@ -4493,7 +4621,6 @@ export default function CalendarNotes() {
         .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: #4B654B; }
         @keyframes sidebarEnter { from { transform: translateX(-100%) } to { transform: translateX(0) } }
         @keyframes slideDown { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:translateY(0) } }
-        .sidebar-section-body { transition: opacity 1s ease, visibility 1s ease, max-height 1s ease; }
         .calendar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.3s; }
         .calendar-scroll:hover { scrollbar-color: #4B654B transparent; }
         .calendar-scroll::-webkit-scrollbar { width: 4px; }
@@ -4507,6 +4634,8 @@ export default function CalendarNotes() {
         button:active:not(:disabled) { filter: brightness(0.70); }
         [contenteditable]:empty:before { content: attr(data-placeholder); color: #cbd5e1; pointer-events: none; }
         .meta-title-input::placeholder { color: rgba(255,255,255,0.5); }
+        .broll-input::placeholder { color: #c0aa90; }
+        .broll-item:hover .broll-drag-handle { opacity: 0.35 !important; }
         .title-field-wrap:hover .star-btn { opacity: 0.6 !important; }
         .title-field-wrap:hover .star-btn:hover { opacity: 1 !important; }
         .ins-pill:hover .ins-delete { opacity: 1 !important; }
@@ -4604,6 +4733,22 @@ export default function CalendarNotes() {
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
               {savedIndicator && <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.55)", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", animation:"fadeIn 0.2s", marginLeft:"4px" }}>✓ salvo</span>}
+              <button onClick={syncToGoogleCalendar} disabled={gcalSyncing}
+                title="Sincronizar com Google Agenda"
+                style={{ background:"none", border:"none", cursor: gcalSyncing ? "default" : "pointer", padding:"6px", display:"flex", alignItems:"center", color: gcalStatus === "ok" ? "#34d399" : gcalStatus === "error" ? "#f87171" : "rgba(255,255,255,0.7)", transition:"color 0.3s", opacity: gcalSyncing ? 0.5 : 1 }}
+                onMouseEnter={e=>{ if(!gcalSyncing) e.currentTarget.style.color="#fff"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.color = gcalStatus === "ok" ? "#34d399" : gcalStatus === "error" ? "#f87171" : "rgba(255,255,255,0.7)"; }}>
+                {gcalSyncing ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation:"spin 1s linear infinite" }}>
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    <path d="M8 14l2.5 2.5L16 11"/>
+                  </svg>
+                )}
+              </button>
             </div>
             <button onClick={()=>setShowNavPicker(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:0, textAlign:"right" }}>
               <div style={{ fontSize:"28px", fontWeight:700, color:"#ffffff", letterSpacing:"-0.01em", fontFamily:"'Inter', sans-serif" }}>
@@ -4856,6 +5001,26 @@ export default function CalendarNotes() {
               <button onClick={()=>setShowMenu(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:"6px", cursor:"pointer", color:"rgba(255,255,255,0.6)", fontSize:"16px", width:"26px", height:"26px", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
             </div>
             <div style={{ flex:1, padding:"8px 10px", display:"flex", flexDirection:"column", gap:"2px", overflowY:"auto" }}>
+
+              {/* Google Calendar Sync */}
+              <button
+                onClick={() => { if (!gcalSyncing) { setShowMenu(false); syncToGoogleCalendar(); } }}
+                disabled={gcalSyncing}
+                style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", borderRadius:"9px", border:"none", background: gcalStatus === "ok" ? "rgba(52,211,153,0.15)" : gcalStatus === "error" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.07)", cursor: gcalSyncing ? "default" : "pointer", width:"100%", textAlign:"left", color: gcalStatus === "ok" ? "#34d399" : gcalStatus === "error" ? "#fca5a5" : "rgba(255,255,255,0.8)", fontFamily:"'Inter', sans-serif", fontSize:"13px", fontWeight:500, transition:"background 0.12s", flexShrink:0 }}
+                onMouseEnter={e=>{ if(!gcalSyncing) e.currentTarget.style.backgroundColor="rgba(255,255,255,0.13)"; }}
+                onMouseLeave={e=>{ if(!gcalSyncing) e.currentTarget.style.backgroundColor = gcalStatus === "ok" ? "rgba(52,211,153,0.15)" : gcalStatus === "error" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.07)"; }}>
+                <span style={{ color: gcalStatus === "ok" ? "#34d399" : gcalStatus === "error" ? "#fca5a5" : "rgba(255,255,255,0.45)", display:"flex", alignItems:"center", flexShrink:0 }}>
+                  {gcalSyncing
+                    ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation:"spin 1s linear infinite" }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  }
+                </span>
+                <span>
+                  {gcalSyncing ? "Sincronizando..." : gcalStatus === "ok" ? "✓ Sincronizado!" : gcalStatus === "error" ? "Erro — tentar novamente" : "Sincronizar com Google Agenda"}
+                </span>
+              </button>
+
+              <div style={{ height:"1px", backgroundColor:"rgba(255,255,255,0.08)", margin:"6px 4px" }} />
 
               {[
                 { label:"Exportar dados", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
