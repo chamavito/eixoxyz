@@ -3001,13 +3001,14 @@ function MilestoneIconSmall({ icon, category, dimmed }) {
 
 // ─── MILESTONE CHIP ───────────────────────────────────────────────────────────
 
-function MilestoneChip({ milestone, isCurrentMonth, onDragStart, onQuickDelete, onContextMenu, onOpen }) {
+function MilestoneChip({ milestone, isCurrentMonth, isLoading, onDragStart, onQuickDelete, onContextMenu, onOpen }) {
   const dimmed = !isCurrentMonth;
   return (
     <>
     <div draggable onDragStart={e=>{e.stopPropagation();onDragStart&&onDragStart(e,milestone);}}
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(milestone); }}
       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,milestone);}}
+      className={isLoading ? "skeleton-item" : undefined}
       style={{ display:"flex", alignItems:"center", gap:"4px", backgroundColor:dimmed?"rgba(255,255,255,0.06)":"#5F805E", border:dimmed?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:"5px", padding:"2px 6px", marginBottom:"3px", overflow:"hidden", flexShrink:0, userSelect:"none", cursor:"grab" }}>
       <span style={{ fontSize:"10px", fontWeight:dimmed?400:700, color:dimmed?"rgba(255,255,255,0.3)":"#ffffff", fontFamily:"'Inter', sans-serif", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{milestone.title}</span>
       {milestone.value && <span style={{ fontSize:"9px", fontWeight:700, color:dimmed?"rgba(255,255,255,0.25)":"#ffffff", fontFamily:"'DM Mono', monospace", flexShrink:0, opacity:0.8 }}>{formatNumber(milestone.value)}</span>}
@@ -3128,7 +3129,7 @@ function ContextMenu({ x, y, items, onClose }) {
 
 // ─── NOTE CHIP ────────────────────────────────────────────────────────────────
 
-function NoteChip({ note, onDragStart, isCurrentMonth, onQuickDelete, onQuickEditStatus, onQuickEditTitle, onContextMenu, onOpen, selected }) {
+function NoteChip({ note, onDragStart, isCurrentMonth, isLoading, onQuickDelete, onQuickEditStatus, onQuickEditTitle, onContextMenu, onOpen, selected }) {
   const T = useTheme();
   const STATUS_MAP = useStatusMap();
   const isPost = note.platform === "instagram";
@@ -3147,16 +3148,15 @@ function NoteChip({ note, onDragStart, isCurrentMonth, onQuickDelete, onQuickEdi
         onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(note); }}
         onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,note);}}
         data-note-id={note.id} data-note-date={note.date}
+        className={isLoading ? "skeleton-item" : undefined}
         style={{ backgroundColor: bg, border:`1px solid ${dimmed ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, borderRadius:"6px", padding:"5px 8px", marginBottom:"3px", overflow:"hidden", flexShrink:0, cursor:"grab", userSelect:"none", transition:"opacity 0.15s", outline: selected ? "1px solid rgba(122,184,122,0.4)" : "none" }}
         onMouseEnter={e=>{ if (!selected) e.currentTarget.style.opacity="0.75"; }}
         onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
           <div style={{ fontSize:"11px", fontWeight: dimmed ? 400 : 600, color: selected ? "#ffffff" : dimmed ? "rgba(255,255,255,0.3)" : "#3a2e24", wordBreak:"break-word", overflowWrap:"anywhere", lineHeight:"1.35", fontFamily:"'Inter', sans-serif", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{note.title}</div>
-          {!dimmed && (isLarge || isPost) && (
+          {!dimmed && isLarge && !isPost && (
             <div style={{ display:"flex", alignItems:"center", gap:"4px" }}>
-              <span style={{ fontSize:"8px", fontWeight:700, color:"#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: isPost ? "#e1306c" : "#FF0032", borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{isPost ? "Post" : "Vídeo"}</span>
-              {!isPost && <span style={{ fontSize:"8px", fontWeight:700, color: selected ? "#3a5a3a" : "#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: selected ? "rgba(255,255,255,0.25)" : status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{status.label}</span>}
-              {isPost && <span style={{ fontSize:"8px", fontWeight:700, color:"#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{status.label}</span>}
+              <span style={{ fontSize:"8px", fontWeight:700, color: selected ? "#3a5a3a" : "#ffffff", fontFamily:"'DM Mono', monospace", letterSpacing:"0.06em", textTransform:"uppercase", backgroundColor: selected ? "rgba(255,255,255,0.25)" : status.color, borderRadius:"3px", padding:"1px 4px", display:"inline-block", opacity: labelOpacity }}>{status.label}</span>
               {!isPast && note.pubTime && <span style={{ fontSize:"8px", color:"#b0a090", fontFamily:"'DM Mono', monospace", marginLeft:"auto" }}>{note.pubTime}</span>}
             </div>
           )}
@@ -3408,13 +3408,14 @@ function ReminderEditor({ reminder, onSave, onClose, onDelete }) {
   );
 }
 
-function ReminderBadge({ reminder, isCurrentMonth, date, today, onDelete, onDragStart, onContextMenu, onOpen }) {
+function ReminderBadge({ reminder, isCurrentMonth, isLoading, date, today, onDelete, onDragStart, onContextMenu, onOpen }) {
   const dimmed = !isCurrentMonth;
   const isPast = date < today;
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();onDragStart&&onDragStart(e,reminder);}}
       onClick={e=>{ e.stopPropagation(); onOpen&&onOpen(reminder); }}
       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onContextMenu&&onContextMenu(e,reminder);}}
+      className={isLoading ? "skeleton-item" : undefined}
       style={{ display:"inline-flex", flexDirection:"column", gap:"1px", backgroundColor: dimmed ? "rgba(255,255,255,0.06)" : "#FEF9F4", border: dimmed ? "1px solid rgba(255,255,255,0.08)" : "1px solid #79A679", borderRadius:"5px", padding:"3px 6px", marginBottom:"2px", userSelect:"none", flexShrink:0, cursor:"grab", overflow:"hidden" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"4px" }}>
         <span style={{ fontSize:"10px", fontWeight: dimmed?400:700, color: dimmed?"rgba(255,255,255,0.3)":"#79A679", fontFamily:"'Inter', sans-serif", whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.3", flex:1 }}>{reminder.title}</span>
@@ -3468,7 +3469,7 @@ function ReminderAddForm({ date, onAdd, onClose }) {
   );
 }
 
-function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones, reminders, today, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
+function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones, reminders, today, isLoading, revealClass, revealDelay, onOpen, onOpenWithAction, onOpenNote, onOpenMilestone, onOpenReminder, onDragStart, onDrop, onMilestoneDragStart, onMilestoneDrop, onReminderDragStart, onReminderDrop, onQuickDeleteNote, onQuickEditStatus, onQuickEditTitle, onQuickDeleteMilestone, onAddReminder, onDeleteReminder, selectedIds }) {
   const STATUS_MAP = useStatusMap();
   const T = useTheme();
   const { date, day, isCurrentMonth } = cellData;
@@ -3495,7 +3496,8 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
     <div onClick={()=>onOpen(date)} onContextMenu={handleDayCtx} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onDragEnd={handleDragEnd}
       onMouseEnter={e=>{ setIsHovered(true); if(isDragOver) return; e.currentTarget.style.filter=isCurrentMonth?"brightness(1.08)":"brightness(0.92)"; }}
       onMouseLeave={e=>{ setIsHovered(false); if(isDragOver) return; e.currentTarget.style.filter=""; }}
-      style={{ border:isDragOver?`2px solid ${BROLL_COLOR}`:isToday?`1px solid ${T.todayBorder}`:"none", borderRadius: isMobile ? "0" : "10px", padding: mobileGridView ? "4px 3px" : isMobile ? "5px 4px" : "8px", minHeight: mobileGridView ? "64px" : isMobile ? undefined : "80px", height: (isMobile && !mobileGridView) ? "100%" : undefined, backgroundColor:isDragOver?"#f0fdf4":isCurrentMonth?(isWeekend?"#6b8f6b":"#8BAB8A"):"#4a6b4a", cursor:"pointer", display:"flex", flexDirection:"column", transition:"filter 0.12s, border-color 0.12s", position:"relative", boxShadow:isDragOver?`0 0 0 3px ${BROLL_COLOR}33`:"none" }}>
+      className={revealClass}
+      style={{ border:isDragOver?`2px solid ${BROLL_COLOR}`:isToday?`1px solid ${T.todayBorder}`:"none", borderRadius: isMobile ? "0" : "10px", padding: mobileGridView ? "4px 3px" : isMobile ? "5px 4px" : "8px", minHeight: mobileGridView ? "64px" : isMobile ? undefined : "80px", height: (isMobile && !mobileGridView) ? "100%" : undefined, backgroundColor:isDragOver?"#f0fdf4":isCurrentMonth?(isWeekend?"#6b8f6b":"#8BAB8A"):"#4a6b4a", cursor:"pointer", display:"flex", flexDirection:"column", transition:"filter 0.12s, border-color 0.12s", position:"relative", boxShadow:isDragOver?`0 0 0 3px ${BROLL_COLOR}33`:"none", animationDelay: revealDelay }}>
 
       <div style={{ position:"absolute", top:"6px", right:"6px", pointerEvents:"none", opacity: isHovered && !isDragOver ? 0.85 : 0, transform: isHovered && !isDragOver ? "scale(1)" : "scale(0.6)", transition:"opacity 0.18s ease, transform 0.18s ease" }}>
         <div style={{ width:"18px", height:"18px", borderRadius:"50%", backgroundColor:isCurrentMonth?"#4A6B4A":"#8CAB8A", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.18)" }}>
@@ -3546,16 +3548,16 @@ function DayCell({ cellData, colIdx, isMobile, mobileGridView, notes, milestones
         )
       ) : (
         <>
-          <div style={{ display:"flex", flexDirection:"column" }}>{sortedNotes.map(n => <NoteChip key={n.id} note={n} onDragStart={onDragStart} isCurrentMonth={isCurrentMonth} onQuickDelete={onQuickDeleteNote} onQuickEditStatus={onQuickEditStatus} onQuickEditTitle={onQuickEditTitle} onContextMenu={handleNoteCtx} onOpen={onOpenNote} selected={selectedIds&&selectedIds.has(n.id)} />)}</div>
+          <div style={{ display:"flex", flexDirection:"column" }}>{sortedNotes.map(n => <NoteChip key={n.id} note={n} onDragStart={onDragStart} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onQuickDelete={onQuickDeleteNote} onQuickEditStatus={onQuickEditStatus} onQuickEditTitle={onQuickEditTitle} onContextMenu={handleNoteCtx} onOpen={onOpenNote} selected={selectedIds&&selectedIds.has(n.id)} />)}</div>
           {milestones.length > 0 && (
             <div style={{ marginTop:sortedNotes.length > 0 ? "16px" : "0px", display:"flex", flexDirection:"column" }}>
-              {milestones.map(m => <MilestoneChip key={m.id} milestone={m} isCurrentMonth={isCurrentMonth} onDragStart={onMilestoneDragStart} onQuickDelete={onQuickDeleteMilestone} onContextMenu={handleMilestoneCtx} onOpen={onOpenMilestone} />)}
+              {milestones.map(m => <MilestoneChip key={m.id} milestone={m} isCurrentMonth={isCurrentMonth} isLoading={isLoading} onDragStart={onMilestoneDragStart} onQuickDelete={onQuickDeleteMilestone} onContextMenu={handleMilestoneCtx} onOpen={onOpenMilestone} />)}
             </div>
           )}
           {reminders.length > 0 && (
             <div style={{ marginTop:(sortedNotes.length > 0 || milestones.length > 0) ? "4px" : "0px", display:"flex", flexDirection:"column", gap:"2px" }}>
               {[...reminders].sort((a,b)=>a.time.localeCompare(b.time)).map(r => (
-                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} date={cellData.date} today={today} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} />
+                <ReminderBadge key={r.id} reminder={r} isCurrentMonth={isCurrentMonth} isLoading={isLoading} date={cellData.date} today={today} onDelete={r=>onDeleteReminder(r)} onDragStart={onReminderDragStart} onContextMenu={handleReminderCtx} onOpen={onOpenReminder} />
               ))}
             </div>
           )}
@@ -4253,7 +4255,33 @@ export default function CalendarNotes() {
       <div className="calendar-scroll" style={{ maxWidth:"1100px", margin:"0 auto", padding: isMobile ? "0" : "32px 24px", fontFamily:"'Inter', sans-serif", overflowY:"hidden", height:"100dvh", boxSizing:"border-box", display:"flex", flexDirection:"column", minHeight:0 }}>
 
         {isLoading && (
-          <div style={{ position:"absolute", inset:0, zIndex:200, pointerEvents:"none", backgroundColor:"rgba(74,107,74,0.5)", animation:"fadeOut 0.6s ease 0.5s forwards" }} />
+          <style>{`
+            .skeleton-item {
+              background-color: #5F805E !important;
+              color: transparent !important;
+              border-color: transparent !important;
+              animation: skeletonPulse 1.2s ease-in-out infinite;
+            }
+            .skeleton-item * {
+              visibility: hidden !important;
+            }
+            @keyframes skeletonPulse {
+              0%, 100% { opacity: 1 }
+              50% { opacity: 0.4 }
+            }
+          `}</style>
+        )}
+        {!isLoading && (
+          <style>{`
+            .reveal-row {
+              animation: revealRow 0.5s ease forwards;
+              opacity: 0;
+            }
+            @keyframes revealRow {
+              from { opacity: 0; transform: translateY(4px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
         )}
 
         {isMobile ? (
@@ -4380,16 +4408,20 @@ export default function CalendarNotes() {
           {WEEKDAYS.map(d => (
             <div key={d} style={{ textAlign:"center", fontSize:"11px", fontWeight:700, color:T.textFaint, fontFamily:"'DM Mono', monospace", letterSpacing:"0.05em", textTransform:"uppercase", padding:"4px 0" }}>{d}</div>
           ))}
-          {grid.map((cell, idx) => (
-            <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today}
-              onOpen={date => setQuickCreate({date,type:"note"})} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
-                    if (note.platform === "instagram") {
-                      setOpenEditor({ type:"post", item:note });
-                    } else {
-                      setOpenEditor({ type:"note", item:note });
-                    }
-                  }} onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})} onOpenReminder={r=>setOpenReminder(r)} onDragStart={handleDragStart} onDrop={handleDrop} onMilestoneDragStart={handleMilestoneDragStart} onMilestoneDrop={handleMilestoneDrop} onReminderDragStart={handleReminderDragStart} onReminderDrop={handleReminderDrop} onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)} onQuickEditStatus={handleQuickEditStatus} onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}} onQuickDeleteMilestone={handleQuickDeleteMilestone} onAddReminder={handleAddReminder} onDeleteReminder={handleDeleteReminder} selectedIds={selectedIds} />
-          ))}
+          {grid.map((cell, idx) => {
+            const row = Math.floor(idx / 7);
+            const revealDelay = isLoading ? undefined : `${row * 0.12}s`;
+            return (
+              <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today} isLoading={isLoading} revealClass={isLoading ? undefined : "reveal-row"} revealDelay={revealDelay}
+                onOpen={date => setQuickCreate({date,type:"note"})} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
+                      if (note.platform === "instagram") {
+                        setOpenEditor({ type:"post", item:note });
+                      } else {
+                        setOpenEditor({ type:"note", item:note });
+                      }
+                    }} onOpenMilestone={m=>setOpenEditor({type:"milestone",item:m})} onOpenReminder={r=>setOpenReminder(r)} onDragStart={handleDragStart} onDrop={handleDrop} onMilestoneDragStart={handleMilestoneDragStart} onMilestoneDrop={handleMilestoneDrop} onReminderDragStart={handleReminderDragStart} onReminderDrop={handleReminderDrop} onQuickDeleteNote={(n)=>handleSoftDeleteNote(n.id,n.date)} onQuickEditStatus={handleQuickEditStatus} onQuickEditTitle={n=>{setQuickEditNote(n);setQuickEditNewTitle(n.title);}} onQuickDeleteMilestone={handleQuickDeleteMilestone} onAddReminder={handleAddReminder} onDeleteReminder={handleDeleteReminder} selectedIds={selectedIds} />
+            );
+          })}
           </div>
           {lasso && lasso.w > 4 && lasso.h > 4 && (
             <div style={{ position:"absolute", left:lasso.x, top:lasso.y, width:lasso.w, height:lasso.h, border:"1.5px solid rgba(122,184,122,0.8)", backgroundColor:"rgba(87,119,87,0.12)", borderRadius:"4px", pointerEvents:"none", zIndex:100 }} />
