@@ -524,24 +524,29 @@ async function supaSave(state) {
         apikey: SUPA_KEY,
         Authorization: `Bearer ${SUPA_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "return=minimal",
+        Prefer: "return=representation",
       },
       body: JSON.stringify({ data: JSON.stringify(state), tab_id: TAB_ID }),
     });
-    // If row doesn't exist yet (0 rows updated), insert it
-    if (res.status === 404 || res.headers.get("content-range") === "*/0") {
-      await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
+    const body = await res.json().catch(() => null);
+    console.log("[supaSave] PATCH status:", res.status, "rows updated:", Array.isArray(body) ? body.length : body);
+    // If no rows updated, insert
+    if (!Array.isArray(body) || body.length === 0) {
+      console.log("[supaSave] No rows updated, inserting...");
+      const res2 = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
         method: "POST",
         headers: {
           apikey: SUPA_KEY,
           Authorization: `Bearer ${SUPA_KEY}`,
           "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates",
+          Prefer: "resolution=merge-duplicates,return=representation",
         },
         body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state), tab_id: TAB_ID }),
       });
+      const body2 = await res2.json().catch(() => null);
+      console.log("[supaSave] INSERT status:", res2.status, body2);
     }
-  } catch(e) {}
+  } catch(e) { console.error("[supaSave] error:", e); }
 }
 
 // Subscribe to Realtime changes — calls onRemoteChange when another device saves
@@ -555,6 +560,7 @@ function supaSubscribe(onRemoteChange) {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      console.log("[supaSubscribe] WebSocket connected");
       ws.send(JSON.stringify({
         topic: "realtime:calendar_sync",
         event: "phx_join",
@@ -575,6 +581,7 @@ function supaSubscribe(onRemoteChange) {
     ws.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
+        if (msg.event !== "heartbeat") console.log("[supaSubscribe] msg:", msg.event, msg.topic, msg.payload?.status);
         if (msg.event === "postgres_changes" && msg.payload?.data?.record) {
           const record = msg.payload.data.record;
           // Ignore changes we made ourselves
