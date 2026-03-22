@@ -6,4 +6,8 @@ export default defineConfig({
   resolve: {
     extensions: [".jsx", ".js"],
   },
+  esbuild: {
+    charset: "utf8",
+    include: /\.[jt]sx?$/,
+  },
 });
