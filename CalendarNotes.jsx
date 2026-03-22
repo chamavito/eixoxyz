@@ -4866,12 +4866,12 @@ Responda APENAS com o JSON, sem texto adicional.`;
               <div>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
                   <button onClick={() => { if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); }}
-                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>‹</button>
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>{"<"}</button>
                   <span style={{ fontSize:"11px", fontWeight:700, color:"rgba(255,255,255,0.6)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.08em" }}>
                     {PT_MONTHS[month]} {year}
                   </span>
                   <button onClick={() => { if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); }}
-                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>›</button>
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>{">"}</button>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"1px" }}>
                   {["D","S","T","Q","Q","S","S"].map((d,i) => (
