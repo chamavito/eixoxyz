@@ -517,32 +517,21 @@ async function supaLoad() {
 
 async function supaSave(state) {
   try {
-    const payload = { data: JSON.stringify(state) };
-    const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state?id=eq.${SUPA_ROW}`, {
-      method: "PATCH",
+    // Use upsert (POST with merge-duplicates) — always works regardless of row existence
+    const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
+      method: "POST",
       headers: {
         apikey: SUPA_KEY,
         Authorization: `Bearer ${SUPA_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "return=representation",
+        Prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ id: SUPA_ROW, data: state }),
     });
-    const body = await res.json().catch(() => []);
-    console.log("[supaSave] PATCH", res.status, JSON.stringify(body).slice(0, 200));
-    if (!Array.isArray(body) || body.length === 0) {
-      const res2 = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
-        method: "POST",
-        headers: {
-          apikey: SUPA_KEY,
-          Authorization: `Bearer ${SUPA_KEY}`,
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=representation",
-        },
-        body: JSON.stringify({ id: SUPA_ROW, ...payload }),
-      });
-      const body2 = await res2.json().catch(() => null);
-      console.log("[supaSave] POST", res2.status, JSON.stringify(body2).slice(0, 200));
+    console.log("[supaSave] upsert", res.status);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      console.error("[supaSave] error:", err);
     }
   } catch(e) { console.error("[supaSave] error:", e); }
 }
