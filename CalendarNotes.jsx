@@ -517,7 +517,6 @@ async function supaLoad() {
 
 async function supaSave(state) {
   try {
-    // Use upsert (POST with merge-duplicates) — always works regardless of row existence
     const res = await fetch(`${SUPA_URL}/rest/v1/calendar_state`, {
       method: "POST",
       headers: {
@@ -526,14 +525,12 @@ async function supaSave(state) {
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify({ id: SUPA_ROW, data: state }),
+      body: JSON.stringify({ id: SUPA_ROW, data: JSON.stringify(state) }),
     });
-    console.log("[supaSave] upsert", res.status);
     if (!res.ok) {
       const err = await res.json().catch(() => null);
-      console.error("[supaSave] error:", err);
     }
-  } catch(e) { console.error("[supaSave] error:", e); }
+  } catch(e) {
 }
 
 // Subscribe to Realtime changes — calls onRemoteChange when another device saves
@@ -547,7 +544,6 @@ function supaSubscribe(onRemoteChange) {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[supaSubscribe] WebSocket connected");
       ws.send(JSON.stringify({
         topic: "realtime:calendar_sync",
         event: "phx_join",
@@ -568,7 +564,6 @@ function supaSubscribe(onRemoteChange) {
     ws.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.event !== "heartbeat") console.log("[supaSubscribe] msg:", msg.event, msg.topic, msg.payload?.status);
         if (msg.event === "postgres_changes" && msg.payload?.data?.record) {
           const record = msg.payload.data.record;
           const raw = record.data;
@@ -4316,6 +4311,8 @@ export default function CalendarNotes() {
   const today = todayISO();
   const [year,  setYear]  = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [typeFilters, setTypeFilters] = useState({ note:true, post:true, milestone:true, reminder:true });
   const [quickCreate, setQuickCreate] = useState(null);
   const [openEditor, setOpenEditor] = useState(null);
   const [openReminder, setOpenReminder] = useState(null);
@@ -4351,10 +4348,12 @@ export default function CalendarNotes() {
       if (importLock.current) return;
       supaLoad().then(remote => {
         if (!remote) return;
-        // Only apply remote if it's newer than what we have locally
         const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
         const remoteTs = remote._savedAt || 0;
-        if (remoteTs > localTs) dispatch({type:"HYDRATE", state: remote});
+        if (remoteTs > localTs) {
+          remoteLock.current = true;
+          dispatch({type:"HYDRATE", state: remote});
+        }
       });
     };
     window.addEventListener("focus", onFocus);
@@ -4362,6 +4361,7 @@ export default function CalendarNotes() {
     // Realtime subscription — instant sync when another device saves
     const unsubscribe = supaSubscribe(remote => {
       if (importLock.current) return;
+      remoteLock.current = true;
       dispatch({type:"HYDRATE", state: remote});
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch(e) {}
     });
@@ -4372,7 +4372,8 @@ export default function CalendarNotes() {
       supaLoad().then(remote => {
         if (!remote) return;
         const localTs = (() => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? (JSON.parse(r)._savedAt || 0) : 0; } catch(e) { return 0; } })();
-        if ((remote._savedAt || 0) > localTs && remote.tab_id !== TAB_ID) {
+        if ((remote._savedAt || 0) > localTs) {
+          remoteLock.current = true;
           dispatch({type:"HYDRATE", state: remote});
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch(e) {}
         }
@@ -4387,10 +4388,12 @@ export default function CalendarNotes() {
   }, []);
 
   const importLock = useRef(false);
+  const remoteLock = useRef(false); // true when state was just hydrated from remote — skip save
 
   // Debounced save — stamps _savedAt timestamp so devices can resolve conflicts
   const saveTimer = useRef(null);
   useEffect(() => {
+    if (remoteLock.current) { remoteLock.current = false; return; }
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -4754,6 +4757,15 @@ Responda APENAS com o JSON, sem texto adicional.`;
                   <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
                 </svg>
               </button>
+              <button onClick={()=>setSidebarVisible(v=>!v)}
+                title={sidebarVisible ? "Ocultar painel" : "Mostrar painel"}
+                style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color: sidebarVisible ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)", transition:"color 0.15s" }}
+                onMouseEnter={e=>e.currentTarget.style.color="#fff"}
+                onMouseLeave={e=>e.currentTarget.style.color=sidebarVisible?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.4)"}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+                </svg>
+              </button>
               <button onClick={prevMonth} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px", display:"flex", alignItems:"center", color:"rgba(255,255,255,0.7)" }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
@@ -4844,6 +4856,63 @@ Responda APENAS com o JSON, sem texto adicional.`;
             </div>
           )
         ) : (
+        <div style={{ flex:1, display:"flex", flexDirection:"row", minHeight:0, gap:"16px" }}>
+
+          {/* ── Left sidebar: mini calendar + filters ── */}
+          {sidebarVisible && (
+            <div style={{ width:"200px", flexShrink:0, display:"flex", flexDirection:"column", gap:"20px", paddingTop:"4px" }}>
+
+              {/* Mini calendar */}
+              <div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
+                  <button onClick={() => { if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); }}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>‹</button>
+                  <span style={{ fontSize:"11px", fontWeight:700, color:"rgba(255,255,255,0.6)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+                    {PT_MONTHS[month]} {year}
+                  </span>
+                  <button onClick={() => { if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); }}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", padding:"2px 4px", fontSize:"14px", lineHeight:1 }}>›</button>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"1px" }}>
+                  {["D","S","T","Q","Q","S","S"].map((d,i) => (
+                    <div key={i} style={{ textAlign:"center", fontSize:"8px", fontWeight:700, color:"rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", padding:"2px 0" }}>{d}</div>
+                  ))}
+                  {buildCalendarGrid(year, month).map((cell, i) => {
+                    const isToday = cell.date === today;
+                    const isCur   = cell.currentMonth;
+                    return (
+                      <div key={i}
+                        style={{ background: isToday ? "rgba(255,255,255,0.9)" : "none", borderRadius:"50%", width:"22px", height:"22px", fontSize:"9px", fontFamily:"'DM Mono', monospace", color: isToday ? "#2d4a2d" : isCur ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)", fontWeight: isToday ? 700 : 400, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        {cell.day}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Type filters */}
+              <div>
+                <div style={{ fontSize:"9px", fontWeight:700, color:"rgba(255,255,255,0.3)", fontFamily:"'DM Mono', monospace", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"10px" }}>Exibir</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  {[
+                    { key:"note",      label:"Roteiros",  color:"#8BAB8A" },
+                    { key:"post",      label:"Posts",     color:"#7b9fd4" },
+                    { key:"milestone", label:"Marcos",    color:"#f5c842" },
+                    { key:"reminder",  label:"Lembretes", color:"#79A679" },
+                  ].map(({ key, label, color }) => (
+                    <button key={key}
+                      onClick={() => setTypeFilters(f => ({ ...f, [key]: !f[key] }))}
+                      style={{ display:"flex", alignItems:"center", gap:"8px", background:"none", border:"none", cursor:"pointer", padding:"2px 0", textAlign:"left" }}>
+                      <div style={{ width:"10px", height:"10px", borderRadius:"3px", flexShrink:0, backgroundColor: typeFilters[key] ? color : "rgba(255,255,255,0.15)", transition:"background-color 0.15s" }} />
+                      <span style={{ fontSize:"12px", color: typeFilters[key] ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)", fontFamily:"'Inter', sans-serif", transition:"color 0.15s" }}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
         <div ref={gridRef} style={{ position:"relative", userSelect: lassoStart.current ? "none" : "auto", flex:1, display:"flex", flexDirection:"column", minHeight:0 }}
           onMouseDown={handleGridMouseDown}
           onMouseMove={handleGridMouseMove}
@@ -4855,7 +4924,11 @@ Responda APENAS com o JSON, sem texto adicional.`;
           ))}
           {grid.map((cell, idx) => {
             return (
-              <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false} notes={state.notes[cell.date]||[]} milestones={state.milestones[cell.date]||[]} reminders={state.reminders[cell.date]||[]} today={today} isLoading={isLoading} isRevealed={isRevealed} revealClass={undefined} revealDelay={undefined}
+              <DayCell key={idx} colIdx={idx % 7} cellData={cell} isMobile={false}
+                notes={(state.notes[cell.date]||[]).filter(n => n.platform === "instagram" ? typeFilters.post : typeFilters.note)}
+                milestones={typeFilters.milestone ? (state.milestones[cell.date]||[]) : []}
+                reminders={typeFilters.reminder ? (state.reminders[cell.date]||[]) : []}
+                today={today} isLoading={isLoading} isRevealed={isRevealed} revealClass={undefined} revealDelay={undefined}
                 onOpen={date => setMobileDayModal({ date })} onOpenWithAction={handleOpenWithAction} onOpenNote={note => {
                       if (note.platform === "instagram") {
                         setOpenEditor({ type:"post", item:note });
@@ -4892,6 +4965,7 @@ Responda APENAS com o JSON, sem texto adicional.`;
           )}
         </div>
         )} {/* end desktop-only grid */}
+        </div> {/* end sidebar+grid flex row */}
 
 
       </div>
